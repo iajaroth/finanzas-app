@@ -335,22 +335,28 @@ export function apiRouter() {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const accounts = db.prepare('SELECT * FROM accounts WHERE archived = 0').all();
     const cats = db.prepare('SELECT * FROM categories').all();
+    const isExtraSender = (m) => extra.some((f) => m.toLowerCase().includes(f.toLowerCase()));
     for (const msg of messages) {
       const exists = db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(msg.id);
       if (exists) { skipped++; continue; }
-      const senderOk = /\.(com|co|net|org|gov|br|mx)\b/i.test(msg.from) && (
-        parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName }) !== null ||
-        extra.some((f) => msg.from.toLowerCase().includes(f.toLowerCase()))
-      );
-      const parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName });
-      if (!parsed) continue; // newsletter / sin monto
-      if (!senderOk && !parsed.bank) continue;
+      // pre-filtro: solo correos de bancos/comercios conocidos o dominios extra del usuario
+      const bankish = detectBank(msg.from, msg.fromName) || isExtraSender(msg.from);
+      if (!bankish) continue;
+      let parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName });
+      if (!parsed) {
+        // el monto suele estar en el cuerpo (p. ej. BAC, Davivienda CR)
+        try {
+          const body = await getMessageBody(msg.id);
+          parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, body, fromAddress: msg.from, fromName: msg.fromName });
+        } catch { /* sin cuerpo disponible */ }
+      }
+      if (!parsed) continue;
       const categoryId = cats.find((c) => c.name === parsed.category_name)?.id || null;
       const acc = accounts.find((a) =>
         parsed.last4 && a.last4 === parsed.last4 ? true :
         parsed.bank && (a.bank.toLowerCase().includes(parsed.bank.toLowerCase()) || parsed.bank.toLowerCase().includes(a.bank.toLowerCase()))
       ) || null;
-      const auto = getSetting('auto_approve') === '1';
+      const auto = getSetting('auto_approve') === '1' && parsed.confidence >= 0.7;
       const importStatus = auto ? 'approved' : 'pending';
       const info = insImport.run(
         msg.id, parsed.bank, msg.from, msg.subject, msg.preview.slice(0, 280), msg.weblink,
@@ -380,22 +386,35 @@ export function apiRouter() {
     const sinceIso = new Date(Date.now() - days * 86400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
     try {
       const messages = await listMessages(sinceIso, Number(req.query.limit) || 100);
-      res.json({
-        items: messages.map((m) => {
-          const parsed = parseBankEmail({ subject: m.subject, preview: m.preview, fromAddress: m.from, fromName: m.fromName });
-          return {
-            from: m.from,
-            fromName: m.fromName,
-            subject: m.subject,
-            receivedAt: m.receivedAt,
-            detected: Boolean(parsed),
-            amount: parsed?.amount ?? null,
-            type: parsed?.type ?? null,
-            bank: parsed?.bank ?? '',
-            merchant: parsed?.merchant ?? '',
-          };
-        }),
-      });
+      const extraS = (getSetting('sender_filters') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const items = [];
+      for (const m of messages) {
+        const bankish = detectBank(m.from, m.fromName) || extraS.some((f) => m.from.toLowerCase().includes(f.toLowerCase()));
+        let parsed = parseBankEmail({ subject: m.subject, preview: m.preview, fromAddress: m.from, fromName: m.fromName });
+        let bodyChecked = false;
+        if (bankish && !parsed) {
+          try {
+            const body = await getMessageBody(m.id);
+            parsed = parseBankEmail({ subject: m.subject, preview: m.preview, body, fromAddress: m.from, fromName: m.fromName });
+            bodyChecked = true;
+          } catch { /* sin cuerpo */ }
+        }
+        items.push({
+          from: m.from,
+          fromName: m.fromName,
+          subject: m.subject,
+          receivedAt: m.receivedAt,
+          bankish,
+          bodyChecked,
+          detected: Boolean(parsed),
+          amount: parsed?.amount ?? null,
+          type: parsed?.type ?? null,
+          bank: parsed?.bank ?? '',
+          merchant: parsed?.merchant ?? '',
+          confidence: parsed?.confidence ?? 0,
+        });
+      }
+      res.json({ items });
     } catch (e) {
       res.status(502).json({ error: e.message });
     }

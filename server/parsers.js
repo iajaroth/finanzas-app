@@ -3,7 +3,8 @@
 export const BANK_SENDERS = [
   { bank: 'Bancolombia', re: /bancolombia\.com\.co|bancolombia/i },
   { bank: 'Nequi', re: /nequi\.com\.co|nequi/i },
-  { bank: 'Davivienda', re: /davivienda\.com/i },
+  { bank: 'Davivienda', re: /davivienda\.com|davibank\.cr/i },
+  { bank: 'BAC Credomatic', re: /baccredomatic|@bac\.|bac\.net/i },
   { bank: 'BBVA', re: /bbva\.com/i },
   { bank: 'Banco de Bogotá', re: /bancobogota\.com\.co|bancodebogota/i },
   { bank: 'Scotiabank Colpatria', re: /scotiabank|colpatria/i },
@@ -30,15 +31,16 @@ export function detectBank(fromAddress = '', fromName = '') {
   return '';
 }
 
-// ---- Montos (formatos es-CO y en-US) ----
+// ---- Montos (formatos es-CO/es-CR, en-US; COP, USD, CRC/₡, COL) ----
 
 function normalizeAmountToken(raw, currencyHint = '') {
   let s = raw.replace(/\s/g, '');
   if (!/^\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?$|^\d+[.,]\d{2}$|^\d+$/.test(s)) return null;
   const hasComma = s.includes(','), hasDot = s.includes('.');
+  // hint en formato: monedas con decimales al estilo US/EU (USD, EUR)
+  const hintIsEn = /USD|US\$|EUR/i.test(currencyHint);
   let cents;
   if (hasComma && hasDot) {
-    // el último separador es el decimal
     const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
     if (lastComma > lastDot) {
       cents = BigInt(Math.round(parseFloat(s.replace(/\./g, '').replace(',', '.')) * 100));
@@ -52,10 +54,9 @@ function normalizeAmountToken(raw, currencyHint = '') {
   } else if (hasDot) {
     const parts = s.split('.');
     if (parts.length === 2 && parts[1].length <= 2 && parts[0].length <= 3) {
-      // "123.45" — ambiguo: en COP los miles usan punto; sin centavos reales
-      const hintIsEs = /COP|MXN|ARS|CLP|PEN/i.test(currencyHint) || !currencyHint;
-      if (hintIsEs) cents = BigInt(parseInt(s.replace(/\./g, ''), 10)) * 100n;
-      else cents = BigInt(Math.round(parseFloat(s) * 100));
+      // "123.45" — ambiguo: es miles en COP/CRC, decimales en USD/EUR
+      if (hintIsEn) cents = BigInt(Math.round(parseFloat(s) * 100));
+      else cents = BigInt(parseInt(s.replace(/\./g, ''), 10)) * 100n;
     } else if (parts.length === 2 && parts[1].length <= 2) {
       cents = BigInt(Math.round(parseFloat(s) * 100));
     } else {
@@ -65,19 +66,24 @@ function normalizeAmountToken(raw, currencyHint = '') {
     cents = BigInt(parseInt(s, 10)) * 100n;
   }
   const n = Number(cents);
-  if (!Number.isFinite(n) || n < 100 || n > 5_000_000_000_00) return null;
+  if (!Number.isFinite(n) || n < 100 || n > 50_000_000_000_00) return null;
   return n;
 }
 
-export function parseAmount(text, currencyHint = '') {
+const CURRENCY_PREFIX = /USD|US\$|COP|CRC|COL|EUR|MXN|₡|\$|€/;
+const CURRENCY_SUFFIX = /COP|USD|CRC|COL|EUR/;
+
+export function parseAmount(text, preferBody = false) {
   if (!text) return null;
-  const re = /(?:USD|US\$|COP|EUR|MXN|\$|€)\s*([0-9][0-9.,\s]{0,23})|([0-9][0-9.,]{0,23})\s*(?:COP|USD|EUR)/gi;
+  const re = new RegExp(`(${CURRENCY_PREFIX.source})\\s*([0-9][0-9.,\\s]{0,23})|([0-9][0-9.,]{0,23})\\s*(${CURRENCY_SUFFIX.source})`, 'gi');
   let m;
   const candidates = [];
   while ((m = re.exec(text)) !== null) {
-    const raw = (m[1] || m[2] || '').trim().replace(/[.,;\s]+$/, '');
-    const amt = normalizeAmountToken(raw, currencyHint);
+    const hint = m[1] || m[4] || '';
+    const raw = (m[2] || m[3] || '').trim().replace(/[.,;\s]+$/, '');
+    const amt = normalizeAmountToken(raw, hint);
     if (amt) candidates.push(amt);
+    if (preferBody && candidates.length) return candidates[0];
   }
   return candidates[0] ?? null;
 }
@@ -94,6 +100,7 @@ const EXPENSE_RE = [
   /compra aprobada/i, /compra por/i, /compraste/i, /compra de/i, /\bcompra\b/i, /pagaste/i,
   /pago realizado/i, /pago de/i, /retiro/i, /d[ée]bito/i, /cobro/i, /consumo/i, /enviaste/i,
   /uso de (tu|la|tarjeta)/i, /adquiriste/i, /suscripci[óo]n/i, /cargo/i, /descont/i,
+  /transacci[óo]n (aprobada|realizada)/i, /notificaci[óo]n de transacci[óo]n/i,
 ];
 
 export function parseType(text) {
@@ -131,7 +138,9 @@ export function extractMerchant(subject = '', preview = '') {
     const up = text.match(/\b([A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ0-9 .,&'"-]{3,38})\b/);
     merchant = up ? up[1] : '';
   }
-  merchant = merchant.replace(NOISE_WORDS, '').replace(/\s{2,}/g, ' ').replace(/[.,;:]+$/, '').trim();
+  merchant = merchant.replace(NOISE_WORDS, '')
+    .replace(/\s*\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}[\s-].*$/, '') // fechas/horas arrastradas
+    .replace(/\s{2,}/g, ' ').replace(/[.,;:]+$/, '').trim();
   if (!merchant) return '';
   for (const [re, name] of MERCHANT_NORMALIZE) {
     if (re.test(merchant)) return name;
@@ -173,13 +182,18 @@ export function guessCategory(merchant = '', text = '', kind = 'expense') {
 
 // ---- Parser principal ----
 
-export function parseBankEmail({ subject = '', preview = '', fromAddress = '', fromName = '', receivedAt }) {
+export function parseBankEmail({ subject = '', preview = '', body = '', fromAddress = '', fromName = '', receivedAt }) {
   const bank = detectBank(fromAddress, fromName);
   const text = `${subject} ${preview}`;
-  const amount = parseAmount(subject) ?? parseAmount(preview);
-  const type = parseType(text);
-  const merchant = extractMerchant(subject, preview);
-  const last4 = extractLast4(text);
+  const searchText = body ? `${text} ${body.replace(/\s{2,}/g, ' ').slice(0, 4000)}` : text;
+  const amount =
+    parseAmount(subject) ??
+    parseAmount(preview) ??
+    (body ? parseAmount(body.replace(/\s{2,}/g, ' ').slice(0, 600), true) : null) ??
+    (body ? parseAmount(body.replace(/\s{2,}/g, ' ')) : null);
+  const type = parseType(searchText);
+  const merchant = extractMerchant(subject, preview) || (body ? extractMerchant(body.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').slice(0, 300), '') : '');
+  const last4 = extractLast4(searchText);
   if (!amount || !type) return null;
   let confidence = 0.35;
   if (bank) confidence += 0.3;
