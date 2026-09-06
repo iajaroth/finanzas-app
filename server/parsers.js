@@ -97,7 +97,7 @@ function normalizeAmountToken(raw, currencyHint = '') {
 }
 
 const CURRENCY_PREFIX = /USD|US\$|COP|CRC|COL|EUR|MXN|₡|\$|€/;
-const CURRENCY_SUFFIX = /COP|USD|CRC|COL|EUR/;
+const CURRENCY_SUFFIX = /COP|USD|CRC|COL|EUR|Colones|colones/;
 
 // detecta la moneda del token encontrado: CRC por defecto, USD si el marcador lo indica
 function currencyOf(marker = '', base = 'CRC') {
@@ -138,9 +138,12 @@ const EXPENSE_RE = [
 ];
 
 export function parseType(text) {
-  // reglas fuertes primero: transferencias recibidas SIEMPRE son ingresos;
-  // envíos/débitos enviados SIEMPRE son gastos
-  if (/recib[íi][óo]\s+una\s+transferencia|transferencia\s+recibida|abono\s+recibido|dep[óo]sito\s+recibido|sinpe\s+recibido/i.test(text)) return 'income';
+  // reglas fuertes primero:
+  // - "Ha recibido X por SINPE Móvil" de un tercero = SIEMPRE ingreso
+  if (/ha\s+recibido\s+[\d.,]+\s+colones\s+de\s+\S+.*sinpe\s*m[óo]vil/i.test(text) || /recib[íi][óo]\s+una\s+transferencia|transferencia\s+recibida|abono\s+recibido|dep[óo]sito\s+recibido|sinpe\s+recibido/i.test(text)) return 'income';
+  // - "transferencia SINPE ... ha sido procesada" = movimiento propio entre bancos = transferencia
+  if (/transferencia\s+sinpe[^.]*ha\s+sido\s+procesada|ha\s+sido\s+procesada[^.]*transferencia/i.test(text)) return 'transfer';
+  // - envíos/débitos enviados = gastos
   if (/env[íi]o\s+exitoso\s+de\s+d[ée]bito|transferencia\s+enviada|enviaste\s+una\s+transferencia|salida\s+por\s+transferencia/i.test(text)) return 'expense';
   let income = 0, expense = 0;
   for (const re of INCOME_RE) if (re.test(text)) income++;
@@ -234,7 +237,7 @@ export function parseBankEmail({ subject = '', preview = '', body = '', fromAddr
   if (!amount) return null;
   const type = parseType(searchText);
   if (!type) return null;
-  const merchant = extractMerchant(subject, preview) || (body ? extractMerchant(body.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').slice(0, 300), '') : '');
+  const merchant = type === 'transfer' ? '' : (extractMerchant(subject, preview) || (body ? extractMerchant(body.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').slice(0, 300), '') : ''));
   const last4 = extractLast4(searchText);
   // banco por contenido cuando el remitente no es el banco (SMS reenviados)
   const effBank = bank || detectBankInText(searchText);
