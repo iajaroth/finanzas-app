@@ -367,6 +367,19 @@ export function apiRouter() {
         } catch { /* sin cuerpo disponible */ }
       }
       if (!parsed) continue;
+      // anti-duplicado entre canales: el mismo movimiento puede llegar por correo
+      // del banco Y por SMS reenviado (distinto remitente e id). Si hay otro registro
+      // con el mismo monto, mismo día y recibido a <20 min, es el mismo movimiento.
+      const thisT = Date.parse(msg.receivedAt || '') || 0;
+      if (thisT) {
+        const dupWin = db.prepare(
+          "SELECT received_at FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ?"
+        ).all(parsed.amount, parsed.occurred_at);
+        if (dupWin.some((w) => Math.abs(Date.parse(w.received_at || '') - thisT) < 20 * 60_000)) {
+          result.skipped++;
+          continue;
+        }
+      }
       // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
       // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta
       const matchAccount = () => {

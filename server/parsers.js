@@ -32,6 +32,31 @@ export function detectBank(fromAddress = '', fromName = '') {
   return '';
 }
 
+// bancos mencionados dentro del texto (para SMS reenviados, donde el remitente
+// es la app de reenvío y no el banco)
+const CONTENT_BANKS = [
+  { bank: 'BAC Credomatic', re: /\bBAC\b/ },
+  { bank: 'DaviBank', re: /\bdavi\s?bank\b/i },
+  { bank: 'Davivienda', re: /\bdavivienda\b/i },
+  { bank: 'Bancolombia', re: /\bbancolombia\b/i },
+  { bank: 'Nequi', re: /\bnequi\b/i },
+];
+
+export function detectBankInText(text = '') {
+  if (!text) return '';
+  for (const b of CONTENT_BANKS) if (b.re.test(text)) return b.bank;
+  return '';
+}
+
+// fechas estilo latino dd/mm/yyyy dentro del texto (los SMS traen la fecha del movimiento)
+export function extractLatinDate(text = '') {
+  const m = text.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  if (+mo > 12 || +d > 31) return null;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
 // ---- Montos (formatos es-CO/es-CR, en-US; COP, USD, CRC/₡, COL) ----
 
 function normalizeAmountToken(raw, currencyHint = '') {
@@ -211,15 +236,19 @@ export function parseBankEmail({ subject = '', preview = '', body = '', fromAddr
   if (!type) return null;
   const merchant = extractMerchant(subject, preview) || (body ? extractMerchant(body.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').slice(0, 300), '') : '');
   const last4 = extractLast4(searchText);
+  // banco por contenido cuando el remitente no es el banco (SMS reenviados)
+  const effBank = bank || detectBankInText(searchText);
+  // fecha del movimiento: prefiere la fecha dentro del texto (dd/mm/yyyy) sobre la de recepción
+  const occurred = extractLatinDate(searchText) || (receivedAt || new Date().toISOString()).slice(0, 10);
   let confidence = 0.35;
-  if (bank) confidence += 0.3;
+  if (effBank) confidence += 0.3;
   if (type) confidence += 0.15;
   if (merchant) confidence += 0.1;
   if (last4) confidence += 0.05;
   const categoryName = guessCategory(merchant, text, type);
   return {
-    bank, amount: amount.cents, currency: amount.currency, type, merchant, last4,
-    occurred_at: (receivedAt || new Date().toISOString()).slice(0, 10),
+    bank: effBank, amount: amount.cents, currency: amount.currency, type, merchant, last4,
+    occurred_at: occurred,
     category_name: categoryName,
     confidence: Math.min(confidence, 0.95),
   };
