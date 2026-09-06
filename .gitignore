@@ -10,3 +10,7 @@ android/
 ios/
 .hallmark/
 recent-debug.json
+txs.json
+imports.json
+recent.json
+del-list.json
