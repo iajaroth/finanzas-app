@@ -127,10 +127,11 @@ export default function SettingsPage() {
           {fxToday ? <span style={{ color: 'var(--faint)' }}> · fuente: {fxToday.source}</span> : null}
         </p>
         <details className="azure" open={!settings?.bccr?.configured}>
-          <summary>BCCR oficial (opcional — tasa histórica exacta por fecha)</summary>
+          <summary>BCCR oficial (opcional — tasa de venta exacta por fecha)</summary>
           <ol>
-            <li>Entra a <strong>gee.bccr.fi.cr/indicadoreseconomicos</strong> y registra tu correo en el servicio web del BCCR (gratis; el token llega por correo).</li>
-            <li>Sin ese registro la app usa automáticamente la API de Hacienda (tasa del día) como respaldo.</li>
+            <li>Registra tu correo en el servicio web del BCCR (busca <strong>“BCCR servicio web indicadores económicos registro”</strong>; es gratis y el token llega por correo).</li>
+            <li>Pega aquí ese correo y el token. Con ello la app consulta la tasa de venta oficial del BCCR para la fecha exacta de cada compra.</li>
+            <li>Sin registro, la app usa una referencia diaria gratuita automática (valor muy cercano, no oficial) y puedes fijar una tasa manual de respaldo abajo.</li>
           </ol>
         </details>
         <div className="form-grid mt-4">

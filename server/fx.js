@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS fx_rates (
 
 const insRate = db.prepare('INSERT OR REPLACE INTO fx_rates (date, rate, source) VALUES (?, ?, ?)');
 const getRateRow = db.prepare('SELECT rate, source FROM fx_rates WHERE date = ?');
+db.prepare('DELETE FROM fx_rates WHERE rate IS NULL OR rate <= 0').run(); // limpia tasas fallidas de corridas previas
 
 function bccrConfig() {
   const email = process.env.BCCR_EMAIL || getSetting('bccr_email') || '';
@@ -36,7 +37,8 @@ function toDdMmYyyy(dateIso) {
 
 async function fetchBccr(dateIso) {
   const { email, token } = bccrConfig();
-  const url = `https://indicadoreseconomicos.bccr.fi.cr/indicadoreseconomicos/WebServices/wsindicadoreseconomicos.asmx/ObtenerIndicadoresEconomicosXML` +
+  const endpoint = getSetting('bccr_endpoint') || 'https://indicadoreseconomicos.bccr.fi.cr/indicadoreseconomicos/WebServices/wsindicadoreseconomicos.asmx/ObtenerIndicadoresEconomicosXML';
+  const url = `${endpoint}` +
     `?FechaInicio=${encodeURIComponent(toDdMmYyyy(dateIso))}&FechaFinal=${encodeURIComponent(toDdMmYyyy(dateIso))}` +
     `&Nombre=318&Subniveles=N&Correo=${encodeURIComponent(email)}&Token=${encodeURIComponent(token)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
@@ -46,16 +48,21 @@ async function fetchBccr(dateIso) {
   if (!m) throw new Error('BCCR sin datos para esa fecha');
   const rate = parseFloat(m[1]);
   if (!Number.isFinite(rate) || rate <= 0) throw new Error('BCCR valor inválido');
-  return { rate, source: 'BCCR' };
+  return { rate, source: 'BCCR (venta)' };
 }
 
-async function fetchHacienda(dateIso) {
-  const res = await fetch('https://api.hacienda.go.cr/tc/indicadores', { signal: AbortSignal.timeout(12_000) });
-  if (!res.ok) throw new Error(`Hacienda ${res.status}`);
+// Referencia diaria gratuita (sin registro). No es la tasa oficial del BCCR.
+async function fetchReferencia(dateIso) {
+  const res = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateIso}/v1/currencies/usd.json`, { signal: AbortSignal.timeout(12_000) });
   const data = await res.json();
-  const venta = Number(data?.dolar?.venta);
-  if (!Number.isFinite(venta) || venta <= 0) throw new Error('Hacienda sin venta');
-  return { rate: venta, source: 'Hacienda (día)' };
+  let rate = Number(data?.usd?.crc);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    const res2 = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json', { signal: AbortSignal.timeout(12_000) });
+    const latest = await res2.json();
+    rate = Number(latest?.usd?.crc);
+  }
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error('referencia sin datos');
+  return { rate, source: 'referencia diaria' };
 }
 
 // Devuelve { rate, source } — colones por dólar para la fecha indicada (ISO).
@@ -69,10 +76,10 @@ export async function getUsdRate(dateIso) {
       const r = await fetchBccr(date);
       insRate.run(date, r.rate, r.source);
       return r;
-    } catch { /* cae a Hacienda */ }
+    } catch { /* cae a referencia */ }
   }
   try {
-    const r = await fetchHacienda(date);
+    const r = await fetchReferencia(date);
     insRate.run(date, r.rate, r.source);
     return r;
   } catch { /* cae a manual */ }
@@ -84,7 +91,7 @@ export async function getUsdRate(dateIso) {
     return r;
   }
   // último recurso: cualquier tasa reciente cacheada
-  const any = db.prepare('SELECT rate, source FROM fx_rates ORDER BY date DESC LIMIT 1').get();
+  const any = db.prepare('SELECT rate, source FROM fx_rates WHERE rate > 0 ORDER BY date DESC LIMIT 1').get();
   if (any) return { rate: any.rate, source: `${any.source} (reciente)` };
   return { rate: 0, source: 'indisponible' };
 }
