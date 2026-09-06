@@ -186,6 +186,8 @@ export function parseBankEmail({ subject = '', preview = '', body = '', fromAddr
   const bank = detectBank(fromAddress, fromName);
   const text = `${subject} ${preview}`;
   const searchText = body ? `${text} ${body.replace(/\s{2,}/g, ' ').slice(0, 4000)}` : text;
+  // una transacción denegada/rechazada no es un gasto real
+  if (/transacci[óo]n\s+(denegada|rechazada|fallida)|compra\s+(denegada|rechazada)|no\s+fue\s+(aprobada|posible)/i.test(searchText)) return null;
   const amount =
     parseAmount(subject) ??
     parseAmount(preview) ??

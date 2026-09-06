@@ -344,15 +344,19 @@ export function apiRouter() {
       // pre-filtro: solo correos de bancos/comercios conocidos o dominios extra del usuario
       const bankish = detectBank(msg.from, msg.fromName) || isExtraSender(msg.from);
       if (!bankish) continue;
-      let parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName });
+      let parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName, receivedAt: msg.receivedAt });
       if (!parsed) {
         // el monto suele estar en el cuerpo (p. ej. BAC, Davivienda CR)
         try {
           const body = await getMessageBody(msg.id);
-          parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, body, fromAddress: msg.from, fromName: msg.fromName });
+          parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, body, fromAddress: msg.from, fromName: msg.fromName, receivedAt: msg.receivedAt });
         } catch { /* sin cuerpo disponible */ }
       }
       if (!parsed) continue;
+      // dedupe: copias del mismo correo en varias carpetas tienen id distinto pero mismos datos
+      const dup = db.prepare("SELECT id FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ? AND bank = ? AND merchant = ?")
+        .get(parsed.amount, parsed.occurred_at, parsed.bank, parsed.merchant);
+      if (dup) { result.skipped++; continue; }
       const categoryId = cats.find((c) => c.name === parsed.category_name)?.id || null;
       const acc = accounts.find((a) =>
         parsed.last4 && a.last4 === parsed.last4 ? true :
@@ -407,12 +411,12 @@ export function apiRouter() {
       const items = [];
       for (const m of messages) {
         const bankish = detectBank(m.from, m.fromName) || extraS.some((f) => m.from.toLowerCase().includes(f.toLowerCase()));
-        let parsed = parseBankEmail({ subject: m.subject, preview: m.preview, fromAddress: m.from, fromName: m.fromName });
+        let parsed = parseBankEmail({ subject: m.subject, preview: m.preview, fromAddress: m.from, fromName: m.fromName, receivedAt: m.receivedAt });
         let bodyChecked = false;
         if (bankish && !parsed) {
           try {
             const body = await getMessageBody(m.id);
-            parsed = parseBankEmail({ subject: m.subject, preview: m.preview, body, fromAddress: m.from, fromName: m.fromName });
+            parsed = parseBankEmail({ subject: m.subject, preview: m.preview, body, fromAddress: m.from, fromName: m.fromName, receivedAt: m.receivedAt });
             bodyChecked = true;
           } catch { /* sin cuerpo */ }
         }
