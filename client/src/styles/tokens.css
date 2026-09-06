@@ -1,36 +1,51 @@
-/* Hallmark · genre: atmospheric · theme: custom "Night Ledger"
- * paper oklch(15% 0.015 262) · accent oklch(80% 0.135 85) gold
- * Tomorrow (display) + Geist (body) + Geist Mono (cifras) · dark · warm accent
+/* Paleta neón del usuario (ciberpunk): cyan #00E1FD · magenta #FF2CDF · verde #00FF5B
+ * rojo #FF2525 · amarillo #FFE53B · azules #2D27FF/#0014FF · rosa #FF0A6C · #FC007A
+ * Tomorrow (display) + Geist (body) + Geist Mono (cifras)
  */
 :root {
-  /* superficies */
-  --paper: oklch(15% 0.015 262);
-  --paper-2: oklch(19.5% 0.018 262);
-  --paper-3: oklch(24% 0.02 262);
-  --line: oklch(100% 0 0 / 0.07);
-  --line-strong: oklch(100% 0 0 / 0.12);
+  /* superficies (azul noche profundo) */
+  --paper: #12132a;
+  --paper-2: #1a1c38;
+  --paper-3: #232650;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
   /* texto */
-  --ink: oklch(94% 0.008 262);
-  --muted: oklch(68% 0.014 262);
-  --faint: oklch(48% 0.012 262);
+  --ink: #f2f3ff;
+  --muted: #a6abd4;
+  --faint: #6e739f;
 
-  /* acento único + semánticos de datos */
-  --accent: oklch(80% 0.135 85);
-  --accent-strong: oklch(86% 0.13 88);
-  --on-accent: oklch(17% 0.03 85);
-  --income: oklch(79% 0.14 165);
-  --expense: oklch(70% 0.17 25);
+  /* acento: cyan principal + degradados de marca */
+  --accent: #00e1fd;
+  --accent-strong: #6feaff;
+  --accent-2: #ff2cdf;
+  --grad-accent: linear-gradient(135deg, #00e1fd 0%, #2d27ff 100%);
+  --grad-hot: linear-gradient(135deg, #ff2cdf 0%, #0014ff 100%);
+  --on-accent: #ffffff;
+
+  /* semánticos de datos */
+  --income: #00ff5b;
+  --expense: #ff2525;
 
   /* paleta de datos (categorías / cuentas) */
-  --c-gold: oklch(80% 0.135 85);
-  --c-mint: oklch(79% 0.14 165);
-  --c-coral: oklch(70% 0.17 25);
-  --c-sky: oklch(75% 0.11 230);
-  --c-violet: oklch(67% 0.15 300);
-  --c-sand: oklch(76% 0.08 95);
-  --c-teal: oklch(73% 0.12 190);
-  --c-plum: oklch(63% 0.13 330);
+  --c-gold: #ffe53b;
+  --c-mint: #00ff5b;
+  --c-coral: #ff2525;
+  --c-sky: #00e1fd;
+  --c-violet: #9d8cff;
+  --c-sand: #ff9aa8;
+  --c-teal: #00ffff;
+  --c-plum: #ff0a6c;
+
+  /* segundas paradas de degradado por color de cuenta */
+  --g-gold-2: #ff2525;
+  --g-mint-2: #0014ff;
+  --g-coral-2: #ff005b;
+  --g-sky-2: #1200ff;
+  --g-violet-2: #2d27ff;
+  --g-sand-2: #ff005b;
+  --g-teal-2: #00ffff;
+  --g-plum-2: #2d27ff;
 
   /* tipografía */
   --font-display: "Tomorrow", "Geist Variable", system-ui, sans-serif;

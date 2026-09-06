@@ -117,7 +117,7 @@ function CCard({ a, onClick }: { a: Account; onClick: () => void }) {
   const Icon = kindIcon(a.kind);
   const isCard = a.kind === 'credit_card';
   return (
-    <button className="ccard" style={{ '--acc': colorToken(a.color) } as React.CSSProperties} onClick={onClick}>
+    <button className="ccard" data-color={a.color} onClick={onClick}>
       <div className="ccard-top">
         <div>
           <div className="ccard-bank">{a.bank || a.name}</div>

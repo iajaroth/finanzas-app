@@ -217,7 +217,7 @@ export default function Mail() {
       <section className="card fade-in">
         <div className="row-between" style={{ flexWrap: 'wrap' }}>
           <div className="row">
-            <span className="tx-icon" style={{ background: 'oklch(80% 0.135 85 / 0.13)', color: 'var(--accent)' }}><MailIcon size={20} /></span>
+            <span className="tx-icon" style={{ background: 'rgba(0, 225, 253, 0.13)', color: 'var(--accent)' }}><MailIcon size={20} /></span>
             <div>
               <div style={{ fontWeight: 600 }}>{status?.connected ? `Outlook conectado${status.account_email ? ` · ${status.account_email}` : ''}` : 'Conecta tu correo de Outlook'}</div>
               <div className="tx-desc">

@@ -60,20 +60,21 @@ function png(size, draw) {
 
 // mezcla colores en el espacio RGB
 const mix = (c1, c2, t) => c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
-const BG = [11, 13, 20];
-const GOLD = [229, 180, 92];
-const MINT = [143, 216, 178];
+const BG = [18, 19, 42];
+const CYAN = [0, 225, 253];
+const MAGENTA = [255, 44, 223];
+const GREEN = [0, 255, 91];
 
 function draw(u, v, corner) {
   const x = u, y = v;
-  // fondo con leve viñeta cálida arriba a la derecha
+  // fondo con glow magenta arriba a la derecha
   const d1 = Math.hypot(x - 0.85, y - 0.1);
-  const glow = Math.max(0, 1 - d1 * 1.7) * 0.16;
-  let c = mix(BG, GOLD, glow);
-  // anillo
+  const glow = Math.max(0, 1 - d1 * 1.7) * 0.2;
+  let c = mix(BG, MAGENTA, glow);
+  // anillo con degradado cyan→azul (izq→der)
   const dc = Math.hypot(x - 0.5, y - 0.5);
   const ring = Math.abs(dc - 0.3) < 0.045 ? 1 : 0;
-  if (ring) c = GOLD;
+  if (ring) c = mix(CYAN, [45, 39, 255], x);
   // barras (gráfico)
   const bars = [
     [0.385, 0.56, 0.72],
@@ -81,7 +82,7 @@ function draw(u, v, corner) {
     [0.565, 0.60, 0.72],
   ];
   for (const [bx, by, bw] of bars) {
-    if (x > bx && x < bx + bw * 0.4 && y > by && y < 0.78) c = MINT;
+    if (x > bx && x < bx + bw * 0.4 && y > by && y < 0.78) c = GREEN;
   }
   return [c[0], c[1], c[2], corner < 1 ? 255 : 255];
 }

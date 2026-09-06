@@ -63,13 +63,13 @@ export default function Dashboard() {
           )}
         </section>
         <section className="card hoverable fade-in">
-          <div className="row"><span className="tx-icon" style={{ background: 'oklch(79% 0.14 165 / 0.13)', color: 'var(--income)' }}><ArrowUpRight size={18} /></span>
+          <div className="row"><span className="tx-icon" style={{ background: 'rgba(0, 255, 91, 0.13)', color: 'var(--income)' }}><ArrowUpRight size={18} /></span>
             <div className="kpi-label">Ingresos del mes</div></div>
           <div className="kpi-value amount-pos">{data ? formatMoney(data.income, currency) : '···'}</div>
           <div className="kpi-sub">{data ? `${data.recent.length ? '' : 'Sin movimientos aún'}` : ''}</div>
         </section>
         <section className="card hoverable fade-in">
-          <div className="row"><span className="tx-icon" style={{ background: 'oklch(70% 0.17 25 / 0.12)', color: 'var(--expense)' }}><ArrowDownLeft size={18} /></span>
+          <div className="row"><span className="tx-icon" style={{ background: 'rgba(255, 37, 37, 0.12)', color: 'var(--expense)' }}><ArrowDownLeft size={18} /></span>
             <div className="kpi-label">Gastos del mes</div></div>
           <div className="kpi-value amount-neg">{data ? formatMoney(data.expense, currency) : '···'}</div>
           <div className="kpi-sub">Neto: <span className={netPos ? 'amount-pos' : 'amount-neg'}>{data ? formatMoney(data.net, currency, { sign: true }) : '···'}</span></div>
