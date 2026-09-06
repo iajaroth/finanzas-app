@@ -515,7 +515,7 @@ export function apiRouter() {
   });
   r.put('/settings', (req, res) => {
     const b = req.body || {};
-    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret'];
+    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at'];
     for (const k of allowed) {
       if (b[k] !== undefined) {
         if (k === 'azure_client_secret' && String(b[k]).startsWith('••')) continue; // no sobreescribir con máscara
