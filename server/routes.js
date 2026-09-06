@@ -369,16 +369,20 @@ export function apiRouter() {
       // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
       // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta
       const matchAccount = () => {
-        const bankOf = (a) => (a.bank || '').toLowerCase();
-        const pb = (parsed.bank || '').toLowerCase();
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const pb = norm(parsed.bank);
+        const sameBank = (a) => {
+          const ab = norm(a.bank);
+          return (ab && pb && (ab.includes(pb) || pb.includes(ab))) || norm(a.name).includes(pb);
+        };
         if (parsed.last4) {
           const byLast4 = accounts.filter((a) => a.last4 === parsed.last4);
           if (byLast4.length === 1) return byLast4[0];
-          const byBoth = byLast4.find((a) => bankOf(a).includes(pb) || pb.includes(bankOf(a)));
+          const byBoth = byLast4.find(sameBank);
           if (byBoth) return byBoth;
         }
-        const sameBank = accounts.filter((a) => pb && (bankOf(a).includes(pb) || pb.includes(bankOf(a))));
-        return sameBank.length === 1 ? sameBank[0] : null;
+        const bankAccounts = accounts.filter(sameBank);
+        return bankAccounts.length === 1 ? bankAccounts[0] : null;
       };
       const acc = matchAccount();
       // tipo de cambio si la moneda difiere de la base

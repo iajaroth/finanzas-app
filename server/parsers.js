@@ -3,7 +3,8 @@
 export const BANK_SENDERS = [
   { bank: 'Bancolombia', re: /bancolombia\.com\.co|bancolombia/i },
   { bank: 'Nequi', re: /nequi\.com\.co|nequi/i },
-  { bank: 'Davivienda', re: /davivienda\.com|davibank\.cr/i },
+  { bank: 'Davivienda', re: /davivienda\.com/i },
+  { bank: 'DaviBank', re: /davibank\.cr/i },
   { bank: 'BAC Credomatic', re: /baccredomatic|@bac\.|bac\.net/i },
   { bank: 'BBVA', re: /bbva\.com/i },
   { bank: 'Banco de Bogotá', re: /bancobogota\.com\.co|bancodebogota/i },
