@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { authRouter, requireAuth } from './auth.js';
 import { apiRouter } from './routes.js';
+import { startNightlyCron } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,10 +38,9 @@ if (fs.existsSync(dist)) {
 }
 
 const PORT = Number(process.env.PORT) || 3000;
-// Sin host explícito: dual-stack (IPv4+IPv6) para que el healthcheck de BusyBox
-// (que prueba ::1 primero) también conecte.
 app.listen(PORT, () => {
   console.log(`finanzas · escuchando en http://0.0.0.0:${PORT}`);
+  startNightlyCron(); // sync diario a las 10 pm hora de Costa Rica
   if (!process.env.JWT_SECRET || !process.env.APP_SECRET) {
     console.warn('⚠ JWT_SECRET/APP_SECRET no definidos: usa secretos fijos en producción.');
   }

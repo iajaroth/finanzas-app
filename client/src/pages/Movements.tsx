@@ -251,9 +251,13 @@ export default function Movements() {
             <input className="input" style={{ paddingLeft: 32, width: 180 }} placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="grow" />
-          <button className="btn btn-primary" onClick={() => setDraft(draftFrom(undefined, currency))}><Plus size={16} /> Nuevo</button>
+          <button className="btn btn-primary hide-mobile" onClick={() => setDraft(draftFrom(undefined, currency))}><Plus size={16} /> Nuevo</button>
         </div>
       </div>
+
+      <button className="fab-add" onClick={() => setDraft(draftFrom(undefined, currency))} aria-label="Nuevo movimiento">
+        <Plus size={18} /> Nuevo
+      </button>
 
       <section className="card fade-in">
         {loading ? (

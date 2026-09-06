@@ -6,6 +6,7 @@ import type { Summary as SummaryType, Tx } from '../types';
 import { formatMoney, monthLabel, currentMonth } from '../format';
 import { CategoryIcon, colorToken, Empty } from '../ui';
 import { Donut, IncomeExpenseBars } from '../charts';
+import { InsightsCard, AiChat } from '../ai';
 import { useToast } from '../App';
 
 function TxRow({ tx, currency }: { tx: Tx; currency: string }) {
@@ -45,6 +46,7 @@ export default function Dashboard() {
 
   return (
     <>
+      <InsightsCard />
       <div className="grid grid-hero">
         <section className="card hoverable fade-in">
           <div className="kpi-label">Balance total</div>
@@ -129,6 +131,7 @@ export default function Dashboard() {
           <Empty icon={Wallet} text="Sin movimientos todavía. Agrega uno o conecta tu correo bancario." />
         )}
       </section>
+      <AiChat />
     </>
   );
 }

@@ -4,6 +4,7 @@ import { azureStatus, authorizeUrl, makeState, exchangeCode, connectionStatus, d
 import { parseBankEmail, detectBank } from './parsers.js';
 import { getUsdRate, fxStatus } from './fx.js';
 import { classifyWithAI, openRouterStatus } from './openrouter.js';
+import { syncState, startSync } from './sync.js';
 
 // ---------- helpers ----------
 
@@ -323,152 +324,12 @@ export function apiRouter() {
     if (b.sender_filters !== undefined) setSetting('sender_filters', String(b.sender_filters || ''));
     res.json({ ok: true });
   });
-  // sync en segundo plano: el arranque responde al instante y el progreso se consulta en /email/status
-  let syncState = { running: false, started_at: null, last_result: null, last_error: null, processed: 0, total: 0 };
-
-  async function runSync() {
-    const now = Date.now();
-    const lastSync = getSetting('last_sync_at');
-    const days = Number(getSetting('sync_days') || 30);
-    let sinceMs;
-    if (lastSync) {
-      const prev = Date.parse(lastSync);
-      // re-sincroniza con 6h de solapamiento para no perder nada en la frontera
-      sinceMs = Math.min(now - 6 * 3600_000, prev);
-    } else {
-      sinceMs = now - days * 86400_000;
-    }
-    const sinceIso = new Date(sinceMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
-    const messages = await listMessages(sinceIso, 800);
-    const extra = (getSetting('sender_filters') || '').split(',').map((s) => s.trim()).filter(Boolean);
-    const result = { scanned: messages.length, created: 0, pending: 0, skipped: 0 };
-    syncState.total = messages.length;
-    syncState.processed = 0;
-    const insImport = db.prepare(`
-      INSERT OR IGNORE INTO email_imports (message_id, bank, from_email, subject, snippet, weblink, type, amount, merchant, occurred_at, category_id, account_id, confidence, status, received_at, currency)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    const accounts = db.prepare('SELECT * FROM accounts WHERE archived = 0').all();
-    const cats = db.prepare('SELECT * FROM categories').all();
-    const baseCurrency = getSetting('currency') || 'CRC';
-    const isExtraSender = (m) => extra.some((f) => m.toLowerCase().includes(f.toLowerCase()));
-    for (const msg of messages) {
-      syncState.processed++;
-      const exists = db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(msg.id);
-      if (exists) { result.skipped++; continue; }
-      // pre-filtro: solo correos de bancos/comercios conocidos o dominios extra del usuario
-      const bankish = detectBank(msg.from, msg.fromName) || isExtraSender(msg.from);
-      if (!bankish) continue;
-      let parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, fromAddress: msg.from, fromName: msg.fromName, receivedAt: msg.receivedAt, base: baseCurrency });
-      if (!parsed) {
-        // el monto suele estar en el cuerpo (p. ej. BAC, Davivienda CR)
-        try {
-          const body = await getMessageBody(msg.id);
-          parsed = parseBankEmail({ subject: msg.subject, preview: msg.preview, body, fromAddress: msg.from, fromName: msg.fromName, receivedAt: msg.receivedAt, base: baseCurrency });
-        } catch { /* sin cuerpo disponible */ }
-      }
-      if (!parsed) continue;
-      // anti-duplicado entre canales: el mismo movimiento puede llegar por correo
-      // del banco Y por SMS reenviado (distinto remitente e id). Si hay otro registro
-      // con el mismo monto, mismo día y recibido a <20 min, es el mismo movimiento.
-      const thisT = Date.parse(msg.receivedAt || '') || 0;
-      if (thisT) {
-        const dupWin = db.prepare(
-          "SELECT received_at FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ?"
-        ).all(parsed.amount, parsed.occurred_at);
-        if (dupWin.some((w) => Math.abs(Date.parse(w.received_at || '') - thisT) < 20 * 60_000)) {
-          result.skipped++;
-          continue;
-        }
-      }
-      // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
-      // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta
-      const matchAccount = () => {
-        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const pb = norm(parsed.bank);
-        const sameBank = (a) => {
-          const ab = norm(a.bank);
-          return (ab && pb && (ab.includes(pb) || pb.includes(ab))) || norm(a.name).includes(pb);
-        };
-        if (parsed.last4) {
-          const byLast4 = accounts.filter((a) => a.last4 === parsed.last4);
-          if (byLast4.length === 1) return byLast4[0];
-          const byBoth = byLast4.find(sameBank);
-          if (byBoth) return byBoth;
-        }
-        const bankAccounts = accounts.filter(sameBank);
-        return bankAccounts.length === 1 ? bankAccounts[0] : null;
-      };
-      const acc = matchAccount();
-      // clasificación con IA (opcional): corrige tipo y detecta transferencias propias
-      let ai = null;
-      if (openRouterStatus().configured) {
-        ai = await classifyWithAI({ subject: msg.subject, snippet: `${msg.preview} ${parsed.merchant}`, fromEmail: msg.from, accounts });
-      }
-      const acc = matchAccount();
-      // tipo de cambio si la moneda difiere de la base
-      let fxRate = 1;
-      if (parsed.currency !== baseCurrency) {
-        fxRate = (await getUsdRate(parsed.occurred_at)).rate || 0;
-      }
-      const categoryId = cats.find((c) => c.name === parsed.category_name)?.id || null;
-      // la IA puede sobreescribir tipo/cuentas cuando está segura
-      const validAcc = (id) => accounts.some((a) => a.id === id);
-      let effType = parsed.type;
-      let effFrom = acc?.id ?? null;
-      let effTo = null;
-      let effCat = categoryId;
-      let confThreshold = parsed.confidence;
-      if (ai && ai.confianza >= 0.6) {
-        if (ai.tipo === 'transfer' && validAcc(ai.cuenta_origen) && validAcc(ai.cuenta_destino)) {
-          effType = 'transfer';
-          effFrom = ai.cuenta_origen;
-          effTo = ai.cuenta_destino;
-          effCat = null;
-        } else if (ai.tipo === 'income' || ai.tipo === 'expense') {
-          effType = ai.tipo;
-          const accId = ai.tipo === 'income' ? ai.cuenta_destino : ai.cuenta_origen;
-          if (validAcc(accId)) effFrom = accId;
-        }
-        confThreshold = ai.confianza;
-      }
-      const auto = getSetting('auto_approve') === '1' && confThreshold >= 0.7;
-      const importStatus = auto ? 'approved' : 'pending';
-      const info = insImport.run(
-        msg.id, parsed.bank, msg.from, msg.subject, msg.preview.slice(0, 280), msg.weblink,
-        effType, parsed.amount, parsed.merchant, parsed.occurred_at, effCat, effFrom,
-        parsed.confidence, importStatus, msg.receivedAt, parsed.currency
-      );
-      if (info.changes === 0) { result.skipped++; continue; }
-      const importId = info.lastInsertRowid;
-      if (auto) {
-        const txInfo = db.prepare(
-          'INSERT INTO transactions (account_id, transfer_to_id, category_id, type, amount, currency, fx_rate, merchant, description, occurred_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(effFrom, effTo, effType === 'transfer' ? null : effCat, effType, parsed.amount, parsed.currency, fxRate, parsed.merchant,
-          `[Correo] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}${ai?.razon ? ` · IA: ${ai.razon}` : ''}`,
-          parsed.occurred_at, 'email');
-        db.prepare('UPDATE email_imports SET transaction_id = ? WHERE id = ?').run(txInfo.lastInsertRowid, importId);
-        result.created++;
-      } else {
-        result.pending++;
-      }
-    }
-    setSetting('last_sync_at', new Date(now).toISOString());
-    return result;
-  }
-
+  // sync en segundo plano (server/sync.js): responde al instante, progreso en /email/status
   r.post('/email/sync', (req, res) => {
     const status = connectionStatus();
     if (!status.configured) return res.status(400).json({ error: 'Outlook no configurado. Falta el Client ID/Secret de Azure.' });
     if (!status.connected) return res.status(400).json({ error: 'Conecta tu cuenta de Outlook primero.' });
-    if (syncState.running) return res.json({ started: true, already_running: true });
-    syncState.running = true;
-    syncState.started_at = new Date().toISOString();
-    syncState.last_error = null;
-    runSync()
-      .then((result) => { syncState.last_result = result; })
-      .catch((e) => { syncState.last_error = e.message; })
-      .finally(() => { syncState.running = false; });
-    res.json({ started: true });
+    res.json(startSync());
   });
   // diagnóstico: últimos correos y por qué el parser los aceptó o descartó
   r.get('/email/recent', async (req, res) => {
@@ -648,6 +509,121 @@ export function apiRouter() {
       res.json({ ...r, date: (req.query.date || new Date().toISOString()).slice(0, 10) });
     } catch (e) {
       res.status(502).json({ error: e.message });
+    }
+  });
+
+  // ---- IA: recopilación semanal + chat ----
+  function weekContext() {
+    const now = new Date();
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const end = iso(now);
+    const start = iso(new Date(now.getTime() - 7 * 86400_000));
+    const prevStart = iso(new Date(now.getTime() - 14 * 86400_000));
+    const agg = (s, e) => db.prepare(`
+      SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount*COALESCE(fx_rate,1) END),0) AS inc,
+             COALESCE(SUM(CASE WHEN type='expense' THEN amount*COALESCE(fx_rate,1) END),0) AS exp,
+             COUNT(*) AS n
+      FROM transactions WHERE occurred_at >= ? AND occurred_at < ?`).get(s, e);
+    const thisWeek = agg(start, end);
+    const prevWeek = agg(prevStart, start);
+    const byCat = db.prepare(`
+      SELECT c.name, SUM(t.amount*COALESCE(t.fx_rate,1)) AS total
+      FROM transactions t JOIN categories c ON c.id = t.category_id
+      WHERE t.type='expense' AND t.occurred_at >= ? AND t.occurred_at < ?
+      GROUP BY c.id ORDER BY total DESC LIMIT 5`).all(start, end);
+    const topTx = db.prepare(`
+      SELECT COALESCE(NULLIF(merchant,''),description,'—') AS m, amount*COALESCE(fx_rate,1) AS total, occurred_at
+      FROM transactions WHERE type='expense' AND occurred_at >= ? AND occurred_at < ?
+      ORDER BY total DESC LIMIT 3`).all(start, end);
+    const balances = computeBalances().map((a) => ({ name: a.name, kind: a.kind, balance: a.balance }));
+    const budget = Number(getSetting('monthly_budget') || 0) / 100;
+    return { start, end, thisWeek, prevWeek, byCat, topTx, balances, budget };
+  }
+
+  r.post('/ai/insights', async (_req, res) => {
+    const ctx = weekContext();
+    const crc = (c) => '₡' + Math.round(c / 100).toLocaleString('es-CR');
+    const fmtLocal = () => {
+      const delta = ctx.thisWeek.exp - ctx.prevWeek.exp;
+      const pct = ctx.prevWeek.exp > 0 ? Math.round((delta / ctx.prevWeek.exp) * 100) : null;
+      const lines = [];
+      lines.push(`Esta semana registraste ${ctx.thisWeek.n} movimientos: ingresos por ${crc(ctx.thisWeek.inc)} y gastos por ${crc(ctx.thisWeek.exp)}${pct !== null ? ` (${pct >= 0 ? '+' : ''}${pct}% vs la semana anterior)` : ''}.`);
+      for (const c of ctx.byCat.slice(0, 3)) lines.push(`Tu mayor gasto fue en ${c.name}: ${crc(c.total)}.`);
+      if (ctx.topTx[0]) lines.push(`El movimiento más fuerte: ${ctx.topTx[0].m} por ${crc(ctx.topTx[0].total)} (${ctx.topTx[0].occurred_at}).`);
+      if (ctx.budget > 0) {
+        const spentMonth = db.prepare(`SELECT COALESCE(SUM(amount*COALESCE(fx_rate,1)),0) AS s FROM transactions WHERE type='expense' AND occurred_at >= ?`).get(ctx.end.slice(0, 7) + '-01').s / 100;
+        lines.push(`Vas ${crc(spentMonth)} de tu presupuesto mensual de ${crc(ctx.budget * 100)}.`);
+      }
+      return lines;
+    };
+    const local = fmtLocal();
+    if (!openRouterStatus().configured) {
+      return res.json({ source: 'local', insights: local, note: 'Activa la IA en Ajustes para análisis más detallado.' });
+    }
+    try {
+      const { key, model } = openRouterStatus();
+      const prompt = `Contexto financiero del usuario (últimos 7 días, ${ctx.start} a ${ctx.end}):
+Ingresos: ${crc(ctx.thisWeek.inc)} | Gastos: ${crc(ctx.thisWeek.exp)} | Movimientos: ${ctx.thisWeek.n}
+Semana anterior: ingresos ${crc(ctx.prevWeek.inc)} | gastos ${crc(ctx.prevWeek.exp)}
+Top categorías: ${ctx.byCat.map((c) => `${c.name} ${crc(c.total)}`).join(', ')}
+Mayores movimientos: ${ctx.topTx.map((t) => `${t.m} ${crc(t.total)}`).join(', ')}
+Saldos: ${ctx.balances.map((b) => `${b.name} ${crc(b.balance)}`).join(', ')}${ctx.budget ? ` | Presupuesto mensual: ${crc(ctx.budget * 100)}` : ''}
+
+Escribe 3 observaciones breves y accionables en español de Costa Rica, una por línea empezando con "•". Sé específico con montos y compara contra la semana anterior. Sin saludos, sin markdown.`;
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+        signal: AbortSignal.timeout(25_000),
+      });
+      if (!res.ok && r.status !== 200) throw new Error(`OpenRouter ${r.status}`);
+      const data = await r.json();
+      const text = data.choices?.[0]?.message?.content || '';
+      const insights = text.split('\n').map((l) => l.replace(/^[•\-*\d.\s]+/, '').trim()).filter(Boolean).slice(0, 5);
+      if (!insights.length) throw new Error('respuesta vacía');
+      res.json({ source: 'ai', insights });
+    } catch {
+      res.json({ source: 'local', insights: local, note: 'La IA no respondió; este resumen es local.' });
+    }
+  });
+
+  r.post('/ai/chat', async (req, res) => {
+    if (!openRouterStatus().configured) {
+      return res.status(400).json({ error: 'Configura tu API key de OpenRouter en Ajustes para usar el asistente.' });
+    }
+    const question = String(req.body?.question || '').slice(0, 500);
+    if (!question) return res.status(400).json({ error: 'Escribe una pregunta.' });
+    const ctx = weekContext();
+    const crc = (c) => '₡' + Math.round(c / 100).toLocaleString('es-CR');
+    const recent = db.prepare(`
+      SELECT occurred_at, type, amount*COALESCE(fx_rate,1) AS crc, COALESCE(NULLIF(merchant,''),description,'—') AS m
+      FROM transactions WHERE occurred_at >= date('now','-30 days')
+      ORDER BY occurred_at DESC LIMIT 120`).all()
+      .map((t) => `${t.occurred_at} ${t.type === 'income' ? '+' : t.type === 'expense' ? '-' : '⇄'} ${crc(t.crc)} ${t.m}`).join('\n');
+    const { key, model } = openRouterStatus();
+    const sys = `Eres el asistente financiero personal del usuario (Costa Rica, moneda CRC). Responde en español, breve y concreto (máx 120 palabras), con montos reales de sus datos.
+Saldos: ${ctx.balances.map((b) => `${b.name} ${crc(b.balance)}`).join(', ')}.
+Semana actual: ingresos ${crc(ctx.thisWeek.inc)}, gastos ${crc(ctx.thisWeek.exp)}. Semana previa: gastos ${crc(ctx.prevWeek.exp)}.
+Top categorías de la semana: ${ctx.byCat.map((c) => `${c.name} ${crc(c.total)}`).join(', ') || 'ninguna'}.
+Movimientos de los últimos 30 días (fecha tipo monto concepto):
+${recent}`;
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
+        body: JSON.stringify({
+          model, temperature: 0.3, max_tokens: 260,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: question }],
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!r.ok) throw new Error(`OpenRouter ${r.status}`);
+      const data = await r.json();
+      const answer = data.choices?.[0]?.message?.content?.trim();
+      if (!answer) throw new Error('respuesta vacía');
+      res.json({ answer });
+    } catch (e) {
+      res.status(502).json({ error: `La IA no respondió: ${e.message}` });
     }
   });
 
