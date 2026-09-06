@@ -144,7 +144,8 @@ export async function getValidAccessToken() {
 }
 
 export function connectionStatus() {
-  const row = db.prepare('SELECT account_email, connected_at, expires_at FROM email_tokens WHERE id = 1').get();
+  // el refresh_token se consulta solo para el booleano; nunca se devuelve
+  const row = db.prepare('SELECT account_email, connected_at, expires_at, refresh_token FROM email_tokens WHERE id = 1').get();
   const az = azureStatus();
   return {
     ...az,
