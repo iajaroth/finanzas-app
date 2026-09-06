@@ -37,7 +37,9 @@ if (fs.existsSync(dist)) {
 }
 
 const PORT = Number(process.env.PORT) || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+// Sin host explícito: dual-stack (IPv4+IPv6) para que el healthcheck de BusyBox
+// (que prueba ::1 primero) también conecte.
+app.listen(PORT, () => {
   console.log(`finanzas · escuchando en http://0.0.0.0:${PORT}`);
   if (!process.env.JWT_SECRET || !process.env.APP_SECRET) {
     console.warn('⚠ JWT_SECRET/APP_SECRET no definidos: usa secretos fijos en producción.');
