@@ -167,7 +167,7 @@ export async function listMessages(sinceIso, max = 300) {
   if (!token) throw new Error('No hay conexión con Outlook');
   let url = `${GRAPH}/me/messages?$filter=receivedDateTime ge ${sinceIso}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,receivedDateTime,from,webLink&$top=50`;
   const out = [];
-  for (let page = 0; page < 8 && url && out.length < max; page++) {
+  for (let page = 0; page < 20 && url && out.length < max; page++) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) throw new Error('token_expirado');
     if (!res.ok) throw new Error(`Graph error ${res.status}: ${await res.text()}`);

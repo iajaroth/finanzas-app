@@ -338,7 +338,7 @@ export function apiRouter() {
       sinceMs = now - days * 86400_000;
     }
     const sinceIso = new Date(sinceMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
-    const messages = await listMessages(sinceIso, 300);
+    const messages = await listMessages(sinceIso, 800);
     const extra = (getSetting('sender_filters') || '').split(',').map((s) => s.trim()).filter(Boolean);
     const result = { scanned: messages.length, created: 0, pending: 0, skipped: 0 };
     syncState.total = messages.length;
@@ -366,20 +366,27 @@ export function apiRouter() {
         } catch { /* sin cuerpo disponible */ }
       }
       if (!parsed) continue;
-      // dedupe: copias del mismo correo en varias carpetas tienen id distinto pero mismos datos
-      const dup = db.prepare("SELECT id FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ? AND bank = ? AND merchant = ?")
-        .get(parsed.amount, parsed.occurred_at, parsed.bank, parsed.merchant);
-      if (dup) { result.skipped++; continue; }
+      // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
+      // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta
+      const matchAccount = () => {
+        const bankOf = (a) => (a.bank || '').toLowerCase();
+        const pb = (parsed.bank || '').toLowerCase();
+        if (parsed.last4) {
+          const byLast4 = accounts.filter((a) => a.last4 === parsed.last4);
+          if (byLast4.length === 1) return byLast4[0];
+          const byBoth = byLast4.find((a) => bankOf(a).includes(pb) || pb.includes(bankOf(a)));
+          if (byBoth) return byBoth;
+        }
+        const sameBank = accounts.filter((a) => pb && (bankOf(a).includes(pb) || pb.includes(bankOf(a))));
+        return sameBank.length === 1 ? sameBank[0] : null;
+      };
+      const acc = matchAccount();
       // tipo de cambio si la moneda difiere de la base
       let fxRate = 1;
       if (parsed.currency !== baseCurrency) {
         fxRate = (await getUsdRate(parsed.occurred_at)).rate || 0;
       }
       const categoryId = cats.find((c) => c.name === parsed.category_name)?.id || null;
-      const acc = accounts.find((a) =>
-        parsed.last4 && a.last4 === parsed.last4 ? true :
-        parsed.bank && (a.bank.toLowerCase().includes(parsed.bank.toLowerCase()) || parsed.bank.toLowerCase().includes(a.bank.toLowerCase()))
-      ) || null;
       const auto = getSetting('auto_approve') === '1' && parsed.confidence >= 0.7;
       const importStatus = auto ? 'approved' : 'pending';
       const info = insImport.run(
