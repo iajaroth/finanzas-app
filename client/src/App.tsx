@@ -3,7 +3,7 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import {
   LayoutDashboard, ArrowLeftRight, CreditCard, ChartPie, Mail, Settings, LogOut,
 } from 'lucide-react';
-import { api, getToken } from './api';
+import { api, getToken, clearToken } from './api';
 import type { EmailStatus } from './types';
 import { Toast } from './ui';
 import Login from './pages/Login';
