@@ -51,7 +51,17 @@ async function fetchBccr(dateIso) {
   return { rate, source: 'BCCR (venta)' };
 }
 
-// Referencia diaria gratuita (sin registro). No es la tasa oficial del BCCR.
+// API de Hacienda (oficial-adjunta, sin registro): tasa del día
+async function fetchHacienda(dateIso) {
+  const res = await fetch('https://api.hacienda.go.cr/indicadores/tc', { signal: AbortSignal.timeout(12_000) });
+  if (!res.ok) throw new Error(`Hacienda ${res.status}`);
+  const data = await res.json();
+  const venta = Number(data?.dolar?.venta?.valor);
+  if (!Number.isFinite(venta) || venta <= 0) throw new Error('Hacienda sin venta');
+  return { rate: venta, source: 'Hacienda (día)' };
+}
+
+// Referencia diaria gratuita (sin registro). Respaldo si Hacienda falla.
 async function fetchReferencia(dateIso) {
   const res = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateIso}/v1/currencies/usd.json`, { signal: AbortSignal.timeout(12_000) });
   const data = await res.json();
@@ -76,13 +86,13 @@ export async function getUsdRate(dateIso) {
       const r = await fetchBccr(date);
       insRate.run(date, r.rate, r.source);
       return r;
-    } catch { /* cae a referencia */ }
+    } catch { /* cae a Hacienda */ }
   }
   try {
-    const r = await fetchReferencia(date);
+    const r = await fetchHacienda(date);
     insRate.run(date, r.rate, r.source);
     return r;
-  } catch { /* cae a manual */ }
+  } catch { /* cae a referencia */ }
 
   const manual = parseFloat(getSetting('usd_rate_manual') || '0');
   if (Number.isFinite(manual) && manual > 0) {

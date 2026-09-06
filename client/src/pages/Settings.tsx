@@ -131,7 +131,7 @@ export default function SettingsPage() {
           <ol>
             <li>Registra tu correo en el servicio web del BCCR (busca <strong>“BCCR servicio web indicadores económicos registro”</strong>; es gratis y el token llega por correo).</li>
             <li>Pega aquí ese correo y el token. Con ello la app consulta la tasa de venta oficial del BCCR para la fecha exacta de cada compra.</li>
-            <li>Sin registro, la app usa una referencia diaria gratuita automática (valor muy cercano, no oficial) y puedes fijar una tasa manual de respaldo abajo.</li>
+            <li>Sin registro, la app usa la API de Hacienda (tasa venta del día, oficial-adjunta) con respaldo automático, y puedes fijar una tasa manual abajo.</li>
           </ol>
         </details>
         <div className="form-grid mt-4">
