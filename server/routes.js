@@ -374,6 +374,32 @@ export function apiRouter() {
     setSetting('last_sync_at', new Date(now).toISOString());
     res.json({ scanned, created, pending, skipped });
   });
+  // diagnóstico: últimos correos y por qué el parser los aceptó o descartó
+  r.get('/email/recent', async (req, res) => {
+    const days = Number(req.query.days) || 7;
+    const sinceIso = new Date(Date.now() - days * 86400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    try {
+      const messages = await listMessages(sinceIso, Number(req.query.limit) || 100);
+      res.json({
+        items: messages.map((m) => {
+          const parsed = parseBankEmail({ subject: m.subject, preview: m.preview, fromAddress: m.from, fromName: m.fromName });
+          return {
+            from: m.from,
+            fromName: m.fromName,
+            subject: m.subject,
+            receivedAt: m.receivedAt,
+            detected: Boolean(parsed),
+            amount: parsed?.amount ?? null,
+            type: parsed?.type ?? null,
+            bank: parsed?.bank ?? '',
+            merchant: parsed?.merchant ?? '',
+          };
+        }),
+      });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
+  });
   r.get('/email/imports', (req, res) => {
     const status = req.query.status || 'pending';
     const W = status === 'all' ? '' : `WHERE i.status = '${status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending'}'`;
