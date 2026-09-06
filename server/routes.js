@@ -78,8 +78,8 @@ export function apiRouter() {
     if (!name?.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
     if (!['bank', 'cash', 'credit_card', 'wallet'].includes(kind)) return res.status(400).json({ error: 'Tipo inválido' });
     const info = db.prepare(
-      'INSERT INTO accounts (name, kind, bank, last4, opening_balance, credit_limit, color) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), kind, bank || '', String(last4 || ''), Number(opening_balance) || 0, Number(credit_limit) || 0, color || 'gold');
+      'INSERT INTO accounts (name, kind, bank, last4, opening_balance, credit_limit, color, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(name.trim(), kind, bank || '', String(last4 || ''), Number(opening_balance) || 0, Number(credit_limit) || 0, color || 'gold', getSetting('currency') || 'CRC');
     res.json(db.prepare('SELECT * FROM accounts WHERE id = ?').get(info.lastInsertRowid));
   });
   r.put('/accounts/:id', (req, res) => {
@@ -87,11 +87,11 @@ export function apiRouter() {
     if (!a) return res.status(404).json({ error: 'Cuenta no encontrada' });
     const b = req.body || {};
     db.prepare(
-      'UPDATE accounts SET name = ?, kind = ?, bank = ?, last4 = ?, opening_balance = ?, credit_limit = ?, color = ?, archived = ? WHERE id = ?'
+      'UPDATE accounts SET name = ?, kind = ?, bank = ?, last4 = ?, opening_balance = ?, credit_limit = ?, color = ?, archived = ?, currency = ? WHERE id = ?'
     ).run(
       b.name?.trim() ?? a.name, b.kind ?? a.kind, b.bank ?? a.bank, String(b.last4 ?? a.last4),
       Number(b.opening_balance ?? a.opening_balance) || 0, Number(b.credit_limit ?? a.credit_limit) || 0,
-      b.color ?? a.color, b.archived === undefined ? a.archived : (b.archived ? 1 : 0), a.id
+      b.color ?? a.color, b.archived === undefined ? a.archived : (b.archived ? 1 : 0), b.currency ?? a.currency, a.id
     );
     res.json(db.prepare('SELECT * FROM accounts WHERE id = ?').get(a.id));
   });

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   kind TEXT NOT NULL DEFAULT 'bank',
   bank TEXT DEFAULT '',
   last4 TEXT DEFAULT '',
-  currency TEXT DEFAULT 'COP',
+  currency TEXT DEFAULT 'CRC',
   opening_balance INTEGER DEFAULT 0,
   credit_limit INTEGER DEFAULT 0,
   color TEXT DEFAULT 'gold',
