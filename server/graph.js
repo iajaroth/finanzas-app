@@ -61,7 +61,9 @@ export function authorizeUrl(state) {
     response_mode: 'query',
     scope: SCOPES,
     state,
-    prompt: 'select_account',
+    // 'consent' fuerza la pantalla de consentimiento completa para garantizar
+    // el grant de offline_access (refresh token) en reconexiones.
+    prompt: 'consent',
   });
   return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${p}`;
 }
