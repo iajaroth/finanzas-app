@@ -24,7 +24,7 @@ const NAV = [
   { to: '/correo', label: 'Correo', icon: Mail },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ];
-const MOBILE_NAV = NAV.filter((n) => n.to !== '/estadisticas');
+const MOBILE_NAV = NAV.filter((n) => n.to !== '/ajustes');
 
 function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -73,6 +73,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           <header className="topbar">
             <h1>{title}</h1>
             <div className="topbar-actions">
+              <NavLink to="/ajustes" className="btn-icon" aria-label="Ajustes" title="Ajustes"><Settings size={18} /></NavLink>
               <button className="btn-icon" onClick={logout} aria-label="Cerrar sesión"><LogOut size={18} /></button>
             </div>
           </header>

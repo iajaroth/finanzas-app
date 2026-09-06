@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Download, Plus, Trash2, X } from 'lucide-react';
-import { api } from '../api';
+import { api, clearToken } from '../api';
 import type { Category, Settings as SettingsType } from '../types';
 import { Field, Modal, colorToken } from '../ui';
 import { useToast } from '../App';
@@ -131,6 +131,9 @@ export default function SettingsPage() {
           El acceso de esta app es de un solo usuario, configurado en el servidor (variables <code>AUTH_EMAIL</code> y <code>AUTH_PASSWORD</code> en Coolify).
           Para cambiar la contraseña, edita la variable y reinicia la app.
         </p>
+        <button className="btn btn-ghost mt-4" onClick={() => { clearToken(); window.location.href = '/login'; }}>
+          Cerrar sesión
+        </button>
       </section>
 
       {catDraft && (
