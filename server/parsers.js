@@ -142,7 +142,7 @@ export function parseType(text) {
   // - "Ha recibido X por SINPE Móvil" de un tercero = SIEMPRE ingreso
   if (/ha\s+recibido\s+[\d.,]+\s+colones\s+de\s+\S+.*sinpe\s*m[óo]vil/i.test(text) || /recib[íi][óo]\s+una\s+transferencia|transferencia\s+recibida|abono\s+recibido|dep[óo]sito\s+recibido|sinpe\s+recibido/i.test(text)) return 'income';
   // - "transferencia SINPE ... ha sido procesada" = movimiento propio entre bancos = transferencia
-  if (/transferencia\s+sinpe[^.]*ha\s+sido\s+procesada|ha\s+sido\s+procesada[^.]*transferencia/i.test(text)) return 'transfer';
+  if (/transferencia\s+sinpe/i.test(text) && /ha\s+sido\s+procesada/i.test(text)) return 'transfer';
   // - envíos/débitos enviados = gastos
   if (/env[íi]o\s+exitoso\s+de\s+d[ée]bito|transferencia\s+enviada|enviaste\s+una\s+transferencia|salida\s+por\s+transferencia/i.test(text)) return 'expense';
   let income = 0, expense = 0;
