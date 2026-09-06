@@ -177,8 +177,18 @@ export default function Mail() {
   async function sync() {
     setBusy(true);
     try {
-      const res = await api.post<{ scanned: number; created: number; pending: number; skipped: number }>('/email/sync');
-      toast(`Sincronizado: ${res.scanned} correos revisados · ${res.created + res.pending} transacciones detectadas`);
+      await api.post('/email/sync');
+      // el sync corre en el servidor; consulta el progreso hasta que termine
+      let final: EmailStatus | null = null;
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        final = await api.get<EmailStatus>('/email/status');
+        setStatus(final);
+        if (!final.syncing) break;
+      }
+      if (final?.last_sync_error) toast(`Error sincronizando: ${final.last_sync_error}`, true);
+      else if (final?.last_sync_result) toast(`Sincronización completada: ${final.last_sync_result.created + final.last_sync_result.pending} transacciones detectadas`);
+      else toast('Sincronización completada');
       loadStatus();
       loadImports();
     } catch (e) { toast((e as Error).message, true); }
@@ -210,9 +220,11 @@ export default function Mail() {
             <div>
               <div style={{ fontWeight: 600 }}>{status?.connected ? `Outlook conectado${status.account_email ? ` · ${status.account_email}` : ''}` : 'Conecta tu correo de Outlook'}</div>
               <div className="tx-desc">
-                {status?.connected
-                  ? `Última sincronización: ${status.last_sync_at ? new Date(status.last_sync_at).toLocaleString('es-CO') : 'nunca'}`
-                  : 'Las notificaciones de tus bancos se convierten en transacciones.'}
+                {status?.syncing
+                  ? `Sincronizando correos… ${status.sync_processed ?? 0}/${status.sync_total ?? '?'}`
+                  : status?.connected
+                    ? `Última sincronización: ${status.last_sync_at ? new Date(status.last_sync_at).toLocaleString('es-CO') : 'nunca'}`
+                    : 'Las notificaciones de tus bancos se convierten en transacciones.'}
               </div>
             </div>
           </div>

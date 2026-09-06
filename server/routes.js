@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, getSetting, setSetting, allSettings } from './db.js';
 import { azureStatus, authorizeUrl, makeState, exchangeCode, connectionStatus, disconnect, listMessages, getMessageBody, refreshAccountEmail } from './graph.js';
-import { parseBankEmail } from './parsers.js';
+import { parseBankEmail, detectBank } from './parsers.js';
 
 // ---------- helpers ----------
 
@@ -274,6 +274,12 @@ export function apiRouter() {
       sync_days: Number(getSetting('sync_days') || 30),
       sender_filters: getSetting('sender_filters'),
       pending: db.prepare("SELECT COUNT(*) AS n FROM email_imports WHERE status = 'pending'").get().n,
+      syncing: syncState.running,
+      sync_started_at: syncState.started_at,
+      sync_processed: syncState.processed,
+      sync_total: syncState.total,
+      last_sync_result: syncState.last_result,
+      last_sync_error: syncState.last_error,
     });
   });
   r.get('/email/authorize', async (_req, res) => {
@@ -304,10 +310,10 @@ export function apiRouter() {
     if (b.sender_filters !== undefined) setSetting('sender_filters', String(b.sender_filters || ''));
     res.json({ ok: true });
   });
-  r.post('/email/sync', async (_req, res) => {
-    const status = connectionStatus();
-    if (!status.configured) return res.status(400).json({ error: 'Outlook no configurado. Falta el Client ID/Secret de Azure.' });
-    if (!status.connected) return res.status(400).json({ error: 'Conecta tu cuenta de Outlook primero.' });
+  // sync en segundo plano: el arranque responde al instante y el progreso se consulta en /email/status
+  let syncState = { running: false, started_at: null, last_result: null, last_error: null, processed: 0, total: 0 };
+
+  async function runSync() {
     const now = Date.now();
     const lastSync = getSetting('last_sync_at');
     const days = Number(getSetting('sync_days') || 30);
@@ -320,16 +326,11 @@ export function apiRouter() {
       sinceMs = now - days * 86400_000;
     }
     const sinceIso = new Date(sinceMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
-    let messages;
-    try {
-      messages = await listMessages(sinceIso, 300);
-    } catch (e) {
-      if (e.message === 'token_expirado') return res.status(401).json({ error: 'Sesión de Outlook expirada. Reconecta la cuenta.' });
-      return res.status(502).json({ error: `Error consultando Graph: ${e.message}` });
-    }
+    const messages = await listMessages(sinceIso, 300);
     const extra = (getSetting('sender_filters') || '').split(',').map((s) => s.trim()).filter(Boolean);
-    const scanned = messages.length;
-    let created = 0, pending = 0, skipped = 0;
+    const result = { scanned: messages.length, created: 0, pending: 0, skipped: 0 };
+    syncState.total = messages.length;
+    syncState.processed = 0;
     const insImport = db.prepare(`
       INSERT OR IGNORE INTO email_imports (message_id, bank, from_email, subject, snippet, weblink, type, amount, merchant, occurred_at, category_id, account_id, confidence, status, received_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -337,8 +338,9 @@ export function apiRouter() {
     const cats = db.prepare('SELECT * FROM categories').all();
     const isExtraSender = (m) => extra.some((f) => m.toLowerCase().includes(f.toLowerCase()));
     for (const msg of messages) {
+      syncState.processed++;
       const exists = db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(msg.id);
-      if (exists) { skipped++; continue; }
+      if (exists) { result.skipped++; continue; }
       // pre-filtro: solo correos de bancos/comercios conocidos o dominios extra del usuario
       const bankish = detectBank(msg.from, msg.fromName) || isExtraSender(msg.from);
       if (!bankish) continue;
@@ -363,7 +365,7 @@ export function apiRouter() {
         parsed.type, parsed.amount, parsed.merchant, parsed.occurred_at, categoryId, acc?.id || null,
         parsed.confidence, importStatus, msg.receivedAt
       );
-      if (info.changes === 0) { skipped++; continue; }
+      if (info.changes === 0) { result.skipped++; continue; }
       const importId = info.lastInsertRowid;
       if (auto) {
         const txInfo = db.prepare(
@@ -372,13 +374,28 @@ export function apiRouter() {
           `[Correo] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}`,
           parsed.occurred_at, 'email');
         db.prepare('UPDATE email_imports SET transaction_id = ? WHERE id = ?').run(txInfo.lastInsertRowid, importId);
-        created++;
+        result.created++;
       } else {
-        pending++;
+        result.pending++;
       }
     }
     setSetting('last_sync_at', new Date(now).toISOString());
-    res.json({ scanned, created, pending, skipped });
+    return result;
+  }
+
+  r.post('/email/sync', (req, res) => {
+    const status = connectionStatus();
+    if (!status.configured) return res.status(400).json({ error: 'Outlook no configurado. Falta el Client ID/Secret de Azure.' });
+    if (!status.connected) return res.status(400).json({ error: 'Conecta tu cuenta de Outlook primero.' });
+    if (syncState.running) return res.json({ started: true, already_running: true });
+    syncState.running = true;
+    syncState.started_at = new Date().toISOString();
+    syncState.last_error = null;
+    runSync()
+      .then((result) => { syncState.last_result = result; })
+      .catch((e) => { syncState.last_error = e.message; })
+      .finally(() => { syncState.running = false; });
+    res.json({ started: true });
   });
   // diagnóstico: últimos correos y por qué el parser los aceptó o descartó
   r.get('/email/recent', async (req, res) => {

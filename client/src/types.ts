@@ -99,6 +99,12 @@ export interface EmailStatus {
   sync_days: number;
   sender_filters: string;
   pending: number;
+  syncing?: boolean;
+  sync_started_at?: string | null;
+  sync_processed?: number;
+  sync_total?: number;
+  last_sync_result?: { scanned: number; created: number; pending: number; skipped: number } | null;
+  last_sync_error?: string | null;
 }
 
 export interface Settings {
