@@ -58,6 +58,9 @@ export default function SettingsPage() {
   const [bccrToken, setBccrToken] = useState('');
   const [manualRate, setManualRate] = useState('');
   const [fxToday, setFxToday] = useState<{ rate: number; source: string } | null>(null);
+  const [orKey, setOrKey] = useState('');
+  const [orModel, setOrModel] = useState('openai/gpt-4o-mini');
+  const [aiBusy, setAiBusy] = useState(false);
   const [catDraft, setCatDraft] = useState<Partial<Category> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
@@ -67,6 +70,7 @@ export default function SettingsPage() {
       setBudgetText(s.monthly_budget ? String(s.monthly_budget / 100) : '');
       setBccrEmail(s.bccr?.email || '');
       setManualRate(s.usd_rate_manual ? String(s.usd_rate_manual) : '');
+      if (s.openrouter?.model) setOrModel(s.openrouter.model);
     }).catch((e) => toast(e.message, true));
     api.get<{ items: Category[] }>('/categories').then((r) => setCategories(r.items)).catch(() => {});
     api.get<{ rate: number; source: string }>('/fx/usd').then(setFxToday).catch(() => setFxToday(null));
@@ -90,6 +94,24 @@ export default function SettingsPage() {
       toast('Configuración de tipo de cambio guardada');
       load();
     } catch (e) { toast((e as Error).message, true); }
+  }
+
+  async function saveAi() {
+    try {
+      await api.put('/settings', { openrouter_key: orKey, openrouter_model: orModel });
+      toast('Clasificación con IA configurada');
+      load();
+    } catch (e) { toast((e as Error).message, true); }
+  }
+
+  async function reclassify() {
+    setAiBusy(true);
+    try {
+      const r = await api.post<{ processed: number; updated: number; transfers: number; skipped: number }>('/email/ai/reclassify');
+      toast(`IA: ${r.updated} reclasificados (${r.transfers} transferencias) de ${r.processed}`);
+      load();
+    } catch (e) { toast((e as Error).message, true); }
+    setAiBusy(false);
   }
 
   async function deleteCategory(id: number) {
@@ -147,6 +169,32 @@ export default function SettingsPage() {
         </div>
         <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
           <button className="btn btn-subtle" onClick={saveBccr}>Guardar tipo de cambio</button>
+        </div>
+      </section>
+
+      <section className="card fade-in">
+        <div className="card-title"><h3>Clasificación con IA (OpenRouter)</h3></div>
+        <p style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)', margin: '0 0 var(--s-4)' }}>
+          La IA revisa los correos bancarios ambiguos y detecta transferencias entre tus propias cuentas
+          (por ejemplo BAC → DaviBank), dejándolas como transferencia y no como gasto. Estado:{' '}
+          {settings?.openrouter?.configured
+            ? <strong style={{ color: 'var(--income)' }}>activa · modelo {settings.openrouter.model}</strong>
+            : <strong style={{ color: 'var(--expense)' }}>inactiva</strong>}
+        </p>
+        <div className="form-grid">
+          <Field label="API key de OpenRouter">
+            <input className="input" type="password" value={orKey} onChange={(e) => setOrKey(e.target.value)}
+              placeholder={settings?.openrouter?.has_key ? '•••••• (guardada)' : 'sk-or-v1-…'} />
+          </Field>
+          <Field label="Modelo">
+            <input className="input" value={orModel} onChange={(e) => setOrModel(e.target.value)} placeholder="openai/gpt-4o-mini" />
+          </Field>
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+          <button className="btn btn-subtle" onClick={saveAi}>Guardar IA</button>
+          <button className="btn btn-primary" disabled={aiBusy || !settings?.openrouter?.configured} onClick={reclassify}>
+            {aiBusy ? 'Reclasificando…' : 'Reclasificar movimientos sin cuenta'}
+          </button>
         </div>
       </section>
 

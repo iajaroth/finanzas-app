@@ -110,6 +110,8 @@ const DEFAULT_SETTINGS = {
   bccr_email: '',
   bccr_token: '',
   usd_rate_manual: '0',
+  openrouter_key: '',
+  openrouter_model: 'openai/gpt-4o-mini',
 };
 
 const insSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

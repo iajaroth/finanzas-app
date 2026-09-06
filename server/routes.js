@@ -3,6 +3,7 @@ import { db, getSetting, setSetting, allSettings } from './db.js';
 import { azureStatus, authorizeUrl, makeState, exchangeCode, connectionStatus, disconnect, listMessages, getMessageBody, refreshAccountEmail } from './graph.js';
 import { parseBankEmail, detectBank } from './parsers.js';
 import { getUsdRate, fxStatus } from './fx.js';
+import { classifyWithAI, openRouterStatus } from './openrouter.js';
 
 // ---------- helpers ----------
 
@@ -385,26 +386,52 @@ export function apiRouter() {
         return bankAccounts.length === 1 ? bankAccounts[0] : null;
       };
       const acc = matchAccount();
+      // clasificación con IA (opcional): corrige tipo y detecta transferencias propias
+      let ai = null;
+      if (openRouterStatus().configured) {
+        ai = await classifyWithAI({ subject: msg.subject, snippet: `${msg.preview} ${parsed.merchant}`, fromEmail: msg.from, accounts });
+      }
+      const acc = matchAccount();
       // tipo de cambio si la moneda difiere de la base
       let fxRate = 1;
       if (parsed.currency !== baseCurrency) {
         fxRate = (await getUsdRate(parsed.occurred_at)).rate || 0;
       }
       const categoryId = cats.find((c) => c.name === parsed.category_name)?.id || null;
-      const auto = getSetting('auto_approve') === '1' && parsed.confidence >= 0.7;
+      // la IA puede sobreescribir tipo/cuentas cuando está segura
+      const validAcc = (id) => accounts.some((a) => a.id === id);
+      let effType = parsed.type;
+      let effFrom = acc?.id ?? null;
+      let effTo = null;
+      let effCat = categoryId;
+      let confThreshold = parsed.confidence;
+      if (ai && ai.confianza >= 0.6) {
+        if (ai.tipo === 'transfer' && validAcc(ai.cuenta_origen) && validAcc(ai.cuenta_destino)) {
+          effType = 'transfer';
+          effFrom = ai.cuenta_origen;
+          effTo = ai.cuenta_destino;
+          effCat = null;
+        } else if (ai.tipo === 'income' || ai.tipo === 'expense') {
+          effType = ai.tipo;
+          const accId = ai.tipo === 'income' ? ai.cuenta_destino : ai.cuenta_origen;
+          if (validAcc(accId)) effFrom = accId;
+        }
+        confThreshold = ai.confianza;
+      }
+      const auto = getSetting('auto_approve') === '1' && confThreshold >= 0.7;
       const importStatus = auto ? 'approved' : 'pending';
       const info = insImport.run(
         msg.id, parsed.bank, msg.from, msg.subject, msg.preview.slice(0, 280), msg.weblink,
-        parsed.type, parsed.amount, parsed.merchant, parsed.occurred_at, categoryId, acc?.id || null,
+        effType, parsed.amount, parsed.merchant, parsed.occurred_at, effCat, effFrom,
         parsed.confidence, importStatus, msg.receivedAt, parsed.currency
       );
       if (info.changes === 0) { result.skipped++; continue; }
       const importId = info.lastInsertRowid;
       if (auto) {
         const txInfo = db.prepare(
-          'INSERT INTO transactions (account_id, category_id, type, amount, currency, fx_rate, merchant, description, occurred_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(acc?.id || null, categoryId, parsed.type, parsed.amount, parsed.currency, fxRate, parsed.merchant,
-          `[Correo] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}`,
+          'INSERT INTO transactions (account_id, transfer_to_id, category_id, type, amount, currency, fx_rate, merchant, description, occurred_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(effFrom, effTo, effType === 'transfer' ? null : effCat, effType, parsed.amount, parsed.currency, fxRate, parsed.merchant,
+          `[Correo] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}${ai?.razon ? ` · IA: ${ai.razon}` : ''}`,
           parsed.occurred_at, 'email');
         db.prepare('UPDATE email_imports SET transaction_id = ? WHERE id = ?').run(txInfo.lastInsertRowid, importId);
         result.created++;
@@ -540,6 +567,35 @@ export function apiRouter() {
     res.json({ ok: true });
   });
 
+  // reclasifica con IA los movimientos de correo que quedaron sin cuenta
+  r.post('/email/ai/reclassify', async (_req, res) => {
+    if (!openRouterStatus().configured) return res.status(400).json({ error: 'Configura tu API key de OpenRouter en Ajustes primero.' });
+    const accounts = db.prepare('SELECT * FROM accounts WHERE archived = 0').all();
+    if (!accounts.length) return res.status(400).json({ error: 'Crea tus cuentas primero.' });
+    const rows = db.prepare(`
+      SELECT t.id AS tx_id, i.subject, i.snippet, i.from_email
+      FROM transactions t JOIN email_imports i ON i.transaction_id = t.id
+      WHERE t.source = 'email' AND t.account_id IS NULL
+      ORDER BY t.occurred_at DESC LIMIT 60`).all();
+    const valid = (id) => accounts.some((a) => a.id === id);
+    let updated = 0, transfers = 0, skipped = 0;
+    for (const row of rows) {
+      const ai = await classifyWithAI({ subject: row.subject, snippet: row.snippet, fromEmail: row.from_email, accounts });
+      if (!ai) { skipped++; continue; }
+      if (ai.tipo === 'transfer' && valid(ai.cuenta_origen) && valid(ai.cuenta_destino) && ai.confianza >= 0.6) {
+        db.prepare("UPDATE transactions SET type = 'transfer', account_id = ?, transfer_to_id = ?, category_id = NULL, notes = ? WHERE id = ?")
+          .run(ai.cuenta_origen, ai.cuenta_destino, `IA: ${ai.razon}`, row.tx_id);
+        transfers++;
+      } else if ((ai.tipo === 'income' || ai.tipo === 'expense') && ai.confianza >= 0.6) {
+        const acc = ai.tipo === 'income' ? ai.cuenta_destino : ai.cuenta_origen;
+        db.prepare('UPDATE transactions SET type = ?, account_id = ?, notes = ? WHERE id = ?')
+          .run(ai.tipo, valid(acc) ? acc : null, `IA: ${ai.razon}`, row.tx_id);
+      } else { skipped++; continue; }
+      updated++;
+    }
+    res.json({ processed: rows.length, updated, transfers, skipped });
+  });
+
   // ---- ajustes ----
   r.get('/settings', (_req, res) => {
     const s = allSettings();
@@ -555,15 +611,17 @@ export function apiRouter() {
       azure: { client_id: az.client_id, has_secret: az.has_secret, redirect_uri: az.redirect_uri, configured: az.configured },
       bccr: { email: fx.email, has_token: fx.has_token, configured: fx.configured },
       usd_rate_manual: Number(s.usd_rate_manual || 0),
+      openrouter: { has_key: Boolean(s.openrouter_key), model: s.openrouter_model, configured: Boolean(s.openrouter_key) },
     });
   });
   r.put('/settings', (req, res) => {
     const b = req.body || {};
-    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint'];
+    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint', 'openrouter_key', 'openrouter_model'];
     for (const k of allowed) {
       if (b[k] !== undefined) {
         if (k === 'azure_client_secret' && String(b[k]).startsWith('••')) continue; // no sobreescribir con máscara
         if (k === 'bccr_token' && String(b[k]).startsWith('••')) continue;
+        if (k === 'openrouter_key' && String(b[k]).startsWith('••')) continue;
         setSetting(k, k === 'auto_approve' ? (b[k] ? '1' : '0') : b[k]);
       }
     }

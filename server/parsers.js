@@ -113,6 +113,10 @@ const EXPENSE_RE = [
 ];
 
 export function parseType(text) {
+  // reglas fuertes primero: transferencias recibidas SIEMPRE son ingresos;
+  // envíos/débitos enviados SIEMPRE son gastos
+  if (/recib[íi][óo]\s+una\s+transferencia|transferencia\s+recibida|abono\s+recibido|dep[óo]sito\s+recibido|sinpe\s+recibido/i.test(text)) return 'income';
+  if (/env[íi]o\s+exitoso\s+de\s+d[ée]bito|transferencia\s+enviada|enviaste\s+una\s+transferencia|salida\s+por\s+transferencia/i.test(text)) return 'expense';
   let income = 0, expense = 0;
   for (const re of INCOME_RE) if (re.test(text)) income++;
   for (const re of EXPENSE_RE) if (re.test(text)) expense++;
