@@ -197,7 +197,7 @@ export function extractLast4(text = '') {
 
 const CATEGORY_RULES = [
   ['Transporte', /uber|didi|cabify|taxi|gasolin|petro|combustib|parquead|peaje|metro|transmilenio|sitr/i],
-  ['Supermercado', /supermerc|d1\b|tiendas ara|exito|éxito|jumbo|olimpica|olímpica|carrefour|mercadona|wal-mart|walmart|costco|arian|la rebaja|supertienda|surtidor/i],
+  ['Supermercado', /supermerc|super\s(olivo|fino|mas)\b|d1\b|tiendas ara|exito|éxito|jumbo|olimpica|olímpica|carrefour|mercadona|wal-mart|walmart|costco|arian|la rebaja|supertienda|surtidor/i],
   ['Restaurantes', /restaurante|mcdonald|burger|pizza|sushi|cafe|café|starbucks|juan valdez|comida|rappi restaurant/i],
   ['Suscripciones', /netflix|spotify|disney|hbo|max\b|prime video|crunchyroll|youtube premium|apple music|deezer|canva|notion|openai|chatgpt|claude|icloud|onedrive|dropbox/i],
   ['Tecnología', /apple|google play|steam|microsoft|xbox|playstation|nintendo|amazon web|aws|hosting|dominio|go daddy|namecheap|software|tienda m/i],
