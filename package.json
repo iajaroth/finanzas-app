@@ -1,0 +1,23 @@
+{
+  "name": "finanzas",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "App personal de finanzas: gastos, ingresos, cuentas y sincronización con Outlook",
+  "scripts": {
+    "dev": "node --watch server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "node server/index.js",
+    "icons": "node scripts/gen-icons.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  }
+}

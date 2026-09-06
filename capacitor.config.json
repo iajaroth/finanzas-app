@@ -1,0 +1,8 @@
+{
+  "appId": "online.jbsautomation.finanzas",
+  "appName": "Finanzas",
+  "webDir": "client/dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

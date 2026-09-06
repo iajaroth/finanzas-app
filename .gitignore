@@ -1,0 +1,11 @@
+node_modules/
+client/node_modules/
+client/dist/
+dist/
+data/
+*.db
+.env
+.DS_Store
+android/
+ios/
+.hallmark/

@@ -1,0 +1,68 @@
+/* Hallmark · genre: atmospheric · theme: custom "Night Ledger"
+ * paper oklch(15% 0.015 262) · accent oklch(80% 0.135 85) gold
+ * Tomorrow (display) + Geist (body) + Geist Mono (cifras) · dark · warm accent
+ */
+:root {
+  /* superficies */
+  --paper: oklch(15% 0.015 262);
+  --paper-2: oklch(19.5% 0.018 262);
+  --paper-3: oklch(24% 0.02 262);
+  --line: oklch(100% 0 0 / 0.07);
+  --line-strong: oklch(100% 0 0 / 0.12);
+
+  /* texto */
+  --ink: oklch(94% 0.008 262);
+  --muted: oklch(68% 0.014 262);
+  --faint: oklch(48% 0.012 262);
+
+  /* acento único + semánticos de datos */
+  --accent: oklch(80% 0.135 85);
+  --accent-strong: oklch(86% 0.13 88);
+  --on-accent: oklch(17% 0.03 85);
+  --income: oklch(79% 0.14 165);
+  --expense: oklch(70% 0.17 25);
+
+  /* paleta de datos (categorías / cuentas) */
+  --c-gold: oklch(80% 0.135 85);
+  --c-mint: oklch(79% 0.14 165);
+  --c-coral: oklch(70% 0.17 25);
+  --c-sky: oklch(75% 0.11 230);
+  --c-violet: oklch(67% 0.15 300);
+  --c-sand: oklch(76% 0.08 95);
+  --c-teal: oklch(73% 0.12 190);
+  --c-plum: oklch(63% 0.13 330);
+
+  /* tipografía */
+  --font-display: "Tomorrow", "Geist Variable", system-ui, sans-serif;
+  --font-body: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  /* escala tipográfica 1.25 */
+  --text-xs: 0.64rem;
+  --text-sm: 0.8rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.9531rem;
+  --text-2xl: 2.4414rem;
+
+  /* espaciado 4pt */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  /* radios */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+
+  /* movimiento */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 240ms;
+
+  color-scheme: dark;
+}
