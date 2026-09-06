@@ -3,7 +3,8 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import {
   LayoutDashboard, ArrowLeftRight, CreditCard, ChartPie, Mail, Settings, LogOut,
 } from 'lucide-react';
-import { getToken, clearToken } from './api';
+import { api, getToken } from './api';
+import type { EmailStatus } from './types';
 import { Toast } from './ui';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -37,6 +38,23 @@ function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!getToken()) navigate('/login', { replace: true });
   }, [location.pathname, navigate]);
+
+  // auto-sync: al abrir la app, si hace más de 6 horas se sincroniza el correo en segundo plano
+  useEffect(() => {
+    if (!getToken()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await api.get<EmailStatus>('/email/status');
+        if (cancelled || !s.connected || s.syncing) return;
+        const last = s.last_sync_at ? Date.parse(s.last_sync_at) : 0;
+        if (Date.now() - last < 6 * 3600_000) return;
+        await api.post('/email/sync');
+        if (!cancelled) setMsg({ text: 'Sincronizando correos nuevos…' });
+      } catch { /* silencio */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const logout = () => { clearToken(); navigate('/login', { replace: true }); };
   const title = NAV.find((n) => n.to === location.pathname)?.label || '';
