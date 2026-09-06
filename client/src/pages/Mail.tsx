@@ -21,6 +21,7 @@ function ImportCard({ imp, accounts, categories, onChanged, onEdit }: {
             {imp.bank && <span className="chip chip-gold">{imp.bank}</span>}
             <span className={`chip ${confColor}`}>{conf}% confianza</span>
             <span className="chip chip-muted">{imp.type === 'income' ? 'Ingreso' : 'Gasto'}</span>
+            {imp.currency && imp.currency !== 'CRC' && <span className="chip chip-sky">{imp.currency}</span>}
           </div>
           <div className="tx-merchant mt-2">{imp.merchant || imp.subject || '(sin detalle)'}</div>
           <div className="tx-desc" style={{ whiteSpace: 'normal' }}>
@@ -32,7 +33,7 @@ function ImportCard({ imp, accounts, categories, onChanged, onEdit }: {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className={`tx-amount ${imp.type === 'income' ? 'amount-pos' : 'amount-neg'}`} style={{ fontSize: 'var(--text-md)' }}>
-            {formatMoney(cents * (imp.type === 'income' ? 1 : -1))}
+            {formatMoney(cents * (imp.type === 'income' ? 1 : -1), imp.currency || 'CRC')}
           </div>
         </div>
       </div>

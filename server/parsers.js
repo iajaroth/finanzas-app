@@ -73,7 +73,16 @@ function normalizeAmountToken(raw, currencyHint = '') {
 const CURRENCY_PREFIX = /USD|US\$|COP|CRC|COL|EUR|MXN|₡|\$|€/;
 const CURRENCY_SUFFIX = /COP|USD|CRC|COL|EUR/;
 
-export function parseAmount(text, preferBody = false) {
+// detecta la moneda del token encontrado: CRC por defecto, USD si el marcador lo indica
+function currencyOf(marker = '', base = 'CRC') {
+  if (/USD|US\$/i.test(marker)) return 'USD';
+  if (/€/i.test(marker)) return 'EUR';
+  if (/COP/i.test(marker)) return 'COP';
+  if (/₡|CRC|COL/i.test(marker)) return 'CRC';
+  return base; // "$" ambiguo → moneda base del usuario
+}
+
+export function parseAmount(text, base = 'CRC') {
   if (!text) return null;
   const re = new RegExp(`(${CURRENCY_PREFIX.source})\\s*([0-9][0-9.,\\s]{0,23})|([0-9][0-9.,]{0,23})\\s*(${CURRENCY_SUFFIX.source})`, 'gi');
   let m;
@@ -82,8 +91,7 @@ export function parseAmount(text, preferBody = false) {
     const hint = m[1] || m[4] || '';
     const raw = (m[2] || m[3] || '').trim().replace(/[.,;\s]+$/, '');
     const amt = normalizeAmountToken(raw, hint);
-    if (amt) candidates.push(amt);
-    if (preferBody && candidates.length) return candidates[0];
+    if (amt) candidates.push({ cents: amt, currency: currencyOf(hint, base) });
   }
   return candidates[0] ?? null;
 }
@@ -182,21 +190,22 @@ export function guessCategory(merchant = '', text = '', kind = 'expense') {
 
 // ---- Parser principal ----
 
-export function parseBankEmail({ subject = '', preview = '', body = '', fromAddress = '', fromName = '', receivedAt }) {
+export function parseBankEmail({ subject = '', preview = '', body = '', fromAddress = '', fromName = '', receivedAt, base = 'CRC' }) {
   const bank = detectBank(fromAddress, fromName);
   const text = `${subject} ${preview}`;
   const searchText = body ? `${text} ${body.replace(/\s{2,}/g, ' ').slice(0, 4000)}` : text;
   // una transacción denegada/rechazada no es un gasto real
   if (/transacci[óo]n\s+(denegada|rechazada|fallida)|compra\s+(denegada|rechazada)|no\s+fue\s+(aprobada|posible)/i.test(searchText)) return null;
   const amount =
-    parseAmount(subject) ??
-    parseAmount(preview) ??
-    (body ? parseAmount(body.replace(/\s{2,}/g, ' ').slice(0, 600), true) : null) ??
-    (body ? parseAmount(body.replace(/\s{2,}/g, ' ')) : null);
+    parseAmount(subject, base) ??
+    parseAmount(preview, base) ??
+    (body ? parseAmount(body.replace(/\s{2,}/g, ' ').slice(0, 600), base) : null) ??
+    (body ? parseAmount(body.replace(/\s{2,}/g, ' '), base) : null);
+  if (!amount) return null;
   const type = parseType(searchText);
+  if (!type) return null;
   const merchant = extractMerchant(subject, preview) || (body ? extractMerchant(body.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').slice(0, 300), '') : '');
   const last4 = extractLast4(searchText);
-  if (!amount || !type) return null;
   let confidence = 0.35;
   if (bank) confidence += 0.3;
   if (type) confidence += 0.15;
@@ -204,7 +213,7 @@ export function parseBankEmail({ subject = '', preview = '', body = '', fromAddr
   if (last4) confidence += 0.05;
   const categoryName = guessCategory(merchant, text, type);
   return {
-    bank, amount, type, merchant, last4,
+    bank, amount: amount.cents, currency: amount.currency, type, merchant, last4,
     occurred_at: (receivedAt || new Date().toISOString()).slice(0, 10),
     category_name: categoryName,
     confidence: Math.min(confidence, 0.95),

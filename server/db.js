@@ -89,8 +89,17 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 );
 `);
 
+// migraciones suaves: columnas de moneda
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+ensureColumn('transactions', 'currency', "TEXT DEFAULT 'CRC'");
+ensureColumn('transactions', 'fx_rate', 'REAL DEFAULT 1');
+ensureColumn('email_imports', 'currency', "TEXT DEFAULT 'CRC'");
+
 const DEFAULT_SETTINGS = {
-  currency: 'COP',
+  currency: 'CRC',
   monthly_budget: '0',
   auto_approve: '0',
   sender_filters: '',
@@ -98,6 +107,9 @@ const DEFAULT_SETTINGS = {
   last_sync_at: '',
   azure_client_id: '',
   azure_client_secret: '',
+  bccr_email: '',
+  bccr_token: '',
+  usd_rate_manual: '0',
 };
 
 const insSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

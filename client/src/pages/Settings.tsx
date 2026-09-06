@@ -2,13 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Plus, Trash2, X } from 'lucide-react';
 import { api, clearToken } from '../api';
 import type { Category, Settings as SettingsType } from '../types';
+import { CURRENCIES } from '../format';
 import { Field, Modal, colorToken } from '../ui';
 import { useToast } from '../App';
 
-const CURRENCIES = [
-  ['COP', 'Peso colombiano'], ['USD', 'Dólar'], ['EUR', 'Euro'], ['MXN', 'Peso mexicano'],
-  ['ARS', 'Peso argentino'], ['CLP', 'Peso chileno'], ['PEN', 'Sol peruano'], ['BRL', 'Real'],
-];
 const ICONS = ['cart', 'utensils', 'car', 'home', 'plug', 'heart', 'book', 'clapperboard', 'repeat', 'plane', 'shirt', 'cpu', 'tag', 'banknote', 'laptop', 'trending-up', 'undo', 'plus'];
 const COLORS = ['gold', 'mint', 'coral', 'sky', 'violet', 'sand', 'teal', 'plum'];
 
@@ -57,6 +54,10 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgetText, setBudgetText] = useState('');
+  const [bccrEmail, setBccrEmail] = useState('');
+  const [bccrToken, setBccrToken] = useState('');
+  const [manualRate, setManualRate] = useState('');
+  const [fxToday, setFxToday] = useState<{ rate: number; source: string } | null>(null);
   const [catDraft, setCatDraft] = useState<Partial<Category> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
@@ -64,8 +65,11 @@ export default function SettingsPage() {
     api.get<SettingsType>('/settings').then((s) => {
       setSettings(s);
       setBudgetText(s.monthly_budget ? String(s.monthly_budget / 100) : '');
+      setBccrEmail(s.bccr?.email || '');
+      setManualRate(s.usd_rate_manual ? String(s.usd_rate_manual) : '');
     }).catch((e) => toast(e.message, true));
     api.get<{ items: Category[] }>('/categories').then((r) => setCategories(r.items)).catch(() => {});
+    api.get<{ rate: number; source: string }>('/fx/usd').then(setFxToday).catch(() => setFxToday(null));
   }, [toast]);
   useEffect(() => { load(); }, [load]);
 
@@ -74,6 +78,18 @@ export default function SettingsPage() {
     await api.put('/settings', { currency: settings?.currency, monthly_budget: budget });
     toast('Ajustes guardados');
     load();
+  }
+
+  async function saveBccr() {
+    try {
+      await api.put('/settings', {
+        bccr_email: bccrEmail,
+        bccr_token: bccrToken,
+        usd_rate_manual: parseFloat(manualRate.replace(',', '.')) || 0,
+      });
+      toast('Configuración de tipo de cambio guardada');
+      load();
+    } catch (e) { toast((e as Error).message, true); }
   }
 
   async function deleteCategory(id: number) {
@@ -100,6 +116,36 @@ export default function SettingsPage() {
         <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
           <button className="btn btn-primary" onClick={saveGeneral}>Guardar</button>
           <a className="btn btn-ghost" href="/api/export" download><Download size={15} /> Exportar datos (JSON)</a>
+        </div>
+      </section>
+
+      <section className="card fade-in">
+        <div className="card-title"><h3>Tipo de cambio (USD → colones)</h3></div>
+        <p style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)', margin: '0 0 var(--s-4)' }}>
+          Las transacciones en dólares se guardan con su equivalente en colones. Tasa actual:{' '}
+          {fxToday ? <strong>₡{fxToday.rate.toLocaleString('es-CR')} por US$1</strong> : 'consultando…'}
+          {fxToday ? <span style={{ color: 'var(--faint)' }}> · fuente: {fxToday.source}</span> : null}
+        </p>
+        <details className="azure" open={!settings?.bccr?.configured}>
+          <summary>BCCR oficial (opcional — tasa histórica exacta por fecha)</summary>
+          <ol>
+            <li>Entra a <strong>gee.bccr.fi.cr/indicadoreseconomicos</strong> y registra tu correo en el servicio web del BCCR (gratis; el token llega por correo).</li>
+            <li>Sin ese registro la app usa automáticamente la API de Hacienda (tasa del día) como respaldo.</li>
+          </ol>
+        </details>
+        <div className="form-grid mt-4">
+          <Field label="Correo registrado en BCCR (opcional)">
+            <input className="input" value={bccrEmail} onChange={(e) => setBccrEmail(e.target.value)} placeholder="tucorreo@outlook.com" />
+          </Field>
+          <Field label="Token del BCCR (opcional)">
+            <input className="input" type="password" value={bccrToken} onChange={(e) => setBccrToken(e.target.value)} placeholder={settings?.bccr?.has_token ? '•••••• (guardado)' : 'Token'} />
+          </Field>
+          <Field label="Tasa manual de respaldo (₡ por US$)">
+            <input className="input amount" inputMode="decimal" value={manualRate} onChange={(e) => setManualRate(e.target.value)} placeholder="Ej: 520" />
+          </Field>
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+          <button className="btn btn-subtle" onClick={saveBccr}>Guardar tipo de cambio</button>
         </div>
       </section>
 

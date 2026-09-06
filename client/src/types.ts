@@ -30,6 +30,8 @@ export interface Tx {
   category_id: number | null;
   type: TxType;
   amount: number;
+  currency?: string;
+  fx_rate?: number;
   merchant: string;
   description: string;
   notes: string;
@@ -82,6 +84,7 @@ export interface EmailImport {
   confidence: number;
   status: 'pending' | 'approved' | 'rejected';
   received_at: string;
+  currency?: string;
   category_name?: string | null;
   account_name?: string | null;
 }
@@ -115,4 +118,6 @@ export interface Settings {
   sync_days: number;
   last_sync_at: string;
   azure: { client_id: string; has_secret: boolean; redirect_uri: string; configured: boolean };
+  bccr?: { email: string; has_token: boolean; configured: boolean };
+  usd_rate_manual?: number;
 }

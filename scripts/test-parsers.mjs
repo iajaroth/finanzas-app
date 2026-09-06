@@ -62,7 +62,7 @@ for (const s of samples) {
   const r = parseBankEmail(s.data);
   console.log(
     r
-      ? `OK | ${s.name}\n     → ${r.type} ${(r.amount / 100).toLocaleString('es')} | bank=${r.bank} | merch=${r.merchant || '-'} | cat=${r.category_name} | conf=${r.confidence.toFixed(2)}`
+      ? `OK | ${s.name}\n     → ${r.type} ${r.currency} ${(r.amount / 100).toLocaleString('es')} | bank=${r.bank} | merch=${r.merchant || '-'} | cat=${r.category_name} | conf=${r.confidence.toFixed(2)}`
       : `-- | ${s.name} (ignorado)`
   );
 }

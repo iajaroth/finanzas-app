@@ -10,15 +10,17 @@ import { useToast } from '../App';
 
 function TxRow({ tx, currency }: { tx: Tx; currency: string }) {
   const sign = tx.type === 'income' ? 1 : tx.type === 'expense' ? -1 : 0;
+  const isForeign = Boolean(tx.currency && tx.currency !== currency);
+  const crc = isForeign ? Math.round(tx.amount * (tx.fx_rate || 0)) : tx.amount;
   return (
     <div className="tx-row">
       <CategoryIcon icon={tx.category_icon} color={tx.category_color} />
       <div className="tx-main">
         <div className="tx-merchant">{tx.merchant || tx.description || (tx.type === 'transfer' ? `→ ${tx.transfer_to_name}` : tx.category_name)}</div>
-        <div className="tx-desc">{tx.account_name || 'Sin cuenta'}{tx.category_name ? ` · ${tx.category_name}` : ''}</div>
+        <div className="tx-desc">{tx.account_name || 'Sin cuenta'}{tx.category_name ? ` · ${tx.category_name}` : ''}{isForeign ? ` · original ${formatMoney(tx.amount, tx.currency)}` : ''}</div>
       </div>
       <span className={`tx-amount ${sign > 0 ? 'amount-pos' : sign < 0 ? 'amount-neg' : 'amount-muted'}`}>
-        {sign === 0 ? '⇄ ' : ''}{formatMoney(tx.amount * sign, currency)}
+        {sign === 0 ? '⇄ ' : ''}{formatMoney(crc * sign, currency)}
       </span>
     </div>
   );

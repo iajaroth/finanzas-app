@@ -2,8 +2,20 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 export const CURRENCY_LOCALE: Record<string, string> = {
-  COP: 'es-CO', USD: 'en-US', EUR: 'es-ES', MXN: 'es-MX', ARS: 'es-AR', CLP: 'es-CL', PEN: 'es-PE', BRL: 'pt-BR',
+  CRC: 'es-CR', COP: 'es-CO', USD: 'en-US', EUR: 'es-ES', MXN: 'es-MX', ARS: 'es-AR', CLP: 'es-CL', PEN: 'es-PE', BRL: 'pt-BR',
 };
+
+export const CURRENCIES: [string, string][] = [
+  ['CRC', 'Colón costarricense'],
+  ['USD', 'Dólar'],
+  ['COP', 'Peso colombiano'],
+  ['EUR', 'Euro'],
+  ['MXN', 'Peso mexicano'],
+  ['ARS', 'Peso argentino'],
+  ['CLP', 'Peso chileno'],
+  ['PEN', 'Sol peruano'],
+  ['BRL', 'Real'],
+];
 
 export function formatMoney(cents: number, currency = 'COP', opts: { sign?: boolean } = {}): string {
   const value = cents / 100;

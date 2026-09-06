@@ -10,6 +10,7 @@ interface TxDraft {
   id?: number;
   type: TxType;
   amountText: string;
+  currency: string;
   occurred_at: string;
   account_id: string;
   transfer_to_id: string;
@@ -19,11 +20,12 @@ interface TxDraft {
   notes: string;
 }
 
-function draftFrom(tx?: Tx | null): TxDraft {
+function draftFrom(tx?: Tx | null, base = 'CRC'): TxDraft {
   return {
     id: tx?.id,
     type: tx?.type || 'expense',
     amountText: tx ? String(tx.amount / 100) : '',
+    currency: tx?.currency || base,
     occurred_at: tx?.occurred_at || todayISO(),
     account_id: tx?.account_id ? String(tx.account_id) : '',
     transfer_to_id: tx?.transfer_to_id ? String(tx.transfer_to_id) : '',
@@ -39,16 +41,29 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
   accounts: Account[]; categories: Category[]; currency: string;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fx, setFx] = useState<{ rate: number; source: string } | null>(null);
   const set = (patch: Partial<TxDraft>) => setDraft({ ...draft, ...patch });
   const cats = categories.filter((c) => (draft.type === 'income' ? c.kind === 'income' : c.kind === 'expense'));
   const cents = parseMoneyInput(draft.amountText);
   const valid = cents !== null && (draft.type !== 'transfer' || draft.transfer_to_id);
+
+  // al usar una moneda distinta a la base, consulta la tasa del día elegido
+  useEffect(() => {
+    if (draft.currency !== currency || !cents) { setFx(null); return; }
+    let alive = true;
+    api.get<{ rate: number; source: string }>(`/fx/usd?date=${draft.occurred_at}`)
+      .then((r) => { if (alive) setFx(r); })
+      .catch(() => { if (alive) setFx(null); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.currency, draft.occurred_at, cents]);
 
   async function save() {
     if (!valid) return;
     const body = {
       type: draft.type,
       amount: cents,
+      currency: draft.currency,
       occurred_at: draft.occurred_at,
       account_id: draft.account_id ? Number(draft.account_id) : null,
       transfer_to_id: draft.type === 'transfer' && draft.transfer_to_id ? Number(draft.transfer_to_id) : null,
@@ -82,6 +97,19 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
           <input className="input amount" inputMode="decimal" placeholder="0,00" value={draft.amountText}
             onChange={(e) => set({ amountText: e.target.value })} autoFocus />
         </Field>
+        <Field label="Moneda">
+          <select className="select" value={draft.currency} onChange={(e) => set({ currency: e.target.value })}>
+            <option value={currency}>{currency} (base)</option>
+            {currency !== 'USD' && <option value="USD">USD</option>}
+          </select>
+        </Field>
+        {draft.currency !== currency && (
+          <div className="span2 notice" style={{ padding: 10 }}>
+            {fx?.rate && cents
+              ? <span>Tasa {fx.source}: ₡{fx.rate.toLocaleString('es-CR')} por US$1 · Equivalente: <strong>{formatMoney(cents * fx.rate, currency)}</strong></span>
+              : <span>Consultando tipo de cambio del BCCR…</span>}
+          </div>
+        )}
         <Field label="Fecha">
           <input className="input" type="date" value={draft.occurred_at} onChange={(e) => set({ occurred_at: e.target.value })} />
         </Field>
@@ -139,6 +167,12 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
       </div>
     </Modal>
   );
+}
+
+// monto efectivo en moneda base + subtítulo con la moneda original
+function txCrc(t: Tx, base: string): number {
+  if (t.currency && t.currency !== base) return Math.round(t.amount * (t.fx_rate || 0));
+  return t.amount;
 }
 
 export default function Movements() {
@@ -217,7 +251,7 @@ export default function Movements() {
             <input className="input" style={{ paddingLeft: 32, width: 180 }} placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="grow" />
-          <button className="btn btn-primary" onClick={() => setDraft(draftFrom())}><Plus size={16} /> Nuevo</button>
+          <button className="btn btn-primary" onClick={() => setDraft(draftFrom(undefined, currency))}><Plus size={16} /> Nuevo</button>
         </div>
       </div>
 
@@ -234,13 +268,15 @@ export default function Movements() {
                   {dayLabel(day)}
                   <span style={{ float: 'right' }}>
                     {(() => {
-                      const net = txs.reduce((a, t) => a + (t.type === 'income' ? t.amount : t.type === 'expense' ? -t.amount : 0), 0);
+                      const net = txs.reduce((a, t) => a + (t.type === 'income' ? txCrc(t, currency) : t.type === 'expense' ? -txCrc(t, currency) : 0), 0);
                       return <span className={net >= 0 ? 'amount-pos' : 'amount-neg'}>{formatMoney(net, currency, { sign: true })}</span>;
                     })()}
                   </span>
                 </div>
-                {txs.map((t) => (
-                  <button className="tx-row" key={t.id} onClick={() => setDraft(draftFrom(t))}>
+                {txs.map((t) => {
+                  const isForeign = Boolean(t.currency && t.currency !== currency);
+                  return (
+                  <button className="tx-row" key={t.id} onClick={() => setDraft(draftFrom(t, currency))}>
                     <CategoryIcon icon={t.category_icon} color={t.category_color} />
                     <div className="tx-main">
                       <div className="tx-merchant">
@@ -250,13 +286,15 @@ export default function Movements() {
                       <div className="tx-desc">
                         {t.type === 'transfer' ? 'Transferencia' : t.category_name || 'Sin categoría'}
                         {t.account_name ? ` · ${t.account_name}` : ''}
+                        {isForeign ? ` · original ${formatMoney(t.amount, t.currency)}` : ''}
                       </div>
                     </div>
                     <span className={`tx-amount ${t.type === 'income' ? 'amount-pos' : t.type === 'expense' ? 'amount-neg' : 'amount-muted'}`}>
-                      {t.type === 'transfer' ? '⇄ ' : ''}{formatMoney(t.amount * (t.type === 'expense' ? -1 : 1), currency)}
+                      {t.type === 'transfer' ? '⇄ ' : ''}{formatMoney(txCrc(t, currency) * (t.type === 'expense' ? -1 : 1), currency)}
                     </span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             ))}
             {total > items.length && <p style={{ color: 'var(--faint)', fontSize: 'var(--text-xs)', textAlign: 'center' }}>Mostrando {items.length} de {total}</p>}
