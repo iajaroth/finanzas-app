@@ -582,8 +582,8 @@ Escribe 3 observaciones breves y accionables en español de Costa Rica, una por 
       const insights = text.split('\n').map((l) => l.replace(/^[•\-*\d.\s]+/, '').trim()).filter(Boolean).slice(0, 5);
       if (!insights.length) throw new Error('respuesta vacía');
       res.json({ source: 'ai', insights });
-    } catch {
-      res.json({ source: 'local', insights: local, note: 'La IA no respondió; este resumen es local.' });
+    } catch (e) {
+      res.json({ source: 'local', insights: local, note: `IA no respondió (${e.message}); resumen local.` });
     }
   });
 
