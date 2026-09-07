@@ -573,7 +573,7 @@ Escribe 3 observaciones breves y accionables en español de Costa Rica, una por 
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 4000, reasoning: { exclude: true }, messages: [{ role: 'user', content: prompt }] }),
         signal: AbortSignal.timeout(25_000),
       });
       if (!res.ok && r.status !== 200) throw new Error(`OpenRouter ${r.status}`);
@@ -613,7 +613,7 @@ ${recent}`;
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
         body: JSON.stringify({
-          model, temperature: 0.3, max_tokens: 1200,
+          model, temperature: 0.3, max_tokens: 4000, reasoning: { exclude: true },
           messages: [{ role: 'system', content: sys }, { role: 'user', content: question }],
         }),
         signal: AbortSignal.timeout(30_000),
