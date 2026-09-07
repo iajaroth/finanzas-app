@@ -59,7 +59,7 @@ export default function SettingsPage() {
   const [manualRate, setManualRate] = useState('');
   const [fxToday, setFxToday] = useState<{ rate: number; source: string } | null>(null);
   const [orKey, setOrKey] = useState('');
-  const [orModel, setOrModel] = useState('openai/gpt-4o-mini');
+  const [orModel, setOrModel] = useState('z-ai/glm-5.3-flash');
   const [aiBusy, setAiBusy] = useState(false);
   const [catDraft, setCatDraft] = useState<Partial<Category> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
