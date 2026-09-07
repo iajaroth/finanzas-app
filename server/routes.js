@@ -580,7 +580,7 @@ Escribe 3 observaciones breves y accionables en español de Costa Rica, una por 
       const data = await r.json();
       const text = data.choices?.[0]?.message?.content || '';
       const insights = text.split('\n').map((l) => l.replace(/^[•\-*\d.\s]+/, '').trim()).filter(Boolean).slice(0, 5);
-      if (!insights.length) throw new Error('respuesta vacía');
+      if (!insights.length) throw new Error(`respuesta vacía [raw: ${text.slice(0, 150)}]`);
       res.json({ source: 'ai', insights });
     } catch (e) {
       res.json({ source: 'local', insights: local, note: `IA no respondió (${e.message}); resumen local.` });
