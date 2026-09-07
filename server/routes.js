@@ -573,12 +573,13 @@ Escribe 3 observaciones breves y accionables en español de Costa Rica, una por 
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
         signal: AbortSignal.timeout(25_000),
       });
       if (!res.ok && r.status !== 200) throw new Error(`OpenRouter ${r.status}`);
       const data = await r.json();
-      const text = data.choices?.[0]?.message?.content || '';
+      const msg = data.choices?.[0]?.message || {};
+      const text = (msg.content || '').trim() || String(msg.reasoning || '').split('\n').filter(Boolean).slice(-1)[0] || '';
       const insights = text.split('\n').map((l) => l.replace(/^[•\-*\d.\s]+/, '').trim()).filter(Boolean).slice(0, 5);
       if (!insights.length) throw new Error(`respuesta vacía [raw: ${text.slice(0, 150)}]`);
       res.json({ source: 'ai', insights });
@@ -612,7 +613,7 @@ ${recent}`;
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
         body: JSON.stringify({
-          model, temperature: 0.3, max_tokens: 260,
+          model, temperature: 0.3, max_tokens: 1200,
           messages: [{ role: 'system', content: sys }, { role: 'user', content: question }],
         }),
         signal: AbortSignal.timeout(30_000),
