@@ -120,5 +120,5 @@ export interface Settings {
   azure: { client_id: string; has_secret: boolean; redirect_uri: string; configured: boolean };
   bccr?: { email: string; has_token: boolean; configured: boolean };
   usd_rate_manual?: number;
-  openrouter?: { has_key: boolean; model: string; configured: boolean };
+  openrouter?: { model: string; configured: boolean };
 }

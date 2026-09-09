@@ -58,7 +58,6 @@ export default function SettingsPage() {
   const [bccrToken, setBccrToken] = useState('');
   const [manualRate, setManualRate] = useState('');
   const [fxToday, setFxToday] = useState<{ rate: number; source: string } | null>(null);
-  const [orKey, setOrKey] = useState('');
   const [orModel, setOrModel] = useState('z-ai/glm-5.3-flash');
   const [aiBusy, setAiBusy] = useState(false);
   const [catDraft, setCatDraft] = useState<Partial<Category> | null>(null);
@@ -98,7 +97,7 @@ export default function SettingsPage() {
 
   async function saveAi() {
     try {
-      await api.put('/settings', { openrouter_key: orKey, openrouter_model: orModel });
+      await api.put('/settings', { openrouter_model: orModel });
       toast('Clasificación con IA configurada');
       load();
     } catch (e) { toast((e as Error).message, true); }
@@ -182,10 +181,6 @@ export default function SettingsPage() {
             : <strong style={{ color: 'var(--expense)' }}>inactiva</strong>}
         </p>
         <div className="form-grid">
-          <Field label="API key de OpenRouter">
-            <input className="input" type="password" value={orKey} onChange={(e) => setOrKey(e.target.value)}
-              placeholder={settings?.openrouter?.has_key ? '•••••• (guardada)' : 'sk-or-v1-…'} />
-          </Field>
           <Field label="Modelo">
             <input className="input" value={orModel} onChange={(e) => setOrModel(e.target.value)} placeholder="openai/gpt-4o-mini" />
           </Field>

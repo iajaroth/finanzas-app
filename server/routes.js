@@ -485,17 +485,18 @@ export function apiRouter() {
       azure: { client_id: az.client_id, has_secret: az.has_secret, redirect_uri: az.redirect_uri, configured: az.configured },
       bccr: { email: fx.email, has_token: fx.has_token, configured: fx.configured },
       usd_rate_manual: Number(s.usd_rate_manual || 0),
-      openrouter: { has_key: Boolean(s.openrouter_key), model: s.openrouter_model, configured: Boolean(s.openrouter_key) },
+      openrouter: { model: s.openrouter_model, configured: openRouterStatus().configured },
     });
   });
   r.put('/settings', (req, res) => {
     const b = req.body || {};
-    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint', 'openrouter_key', 'openrouter_model'];
+    // openrouter_key deliberately excluded: la key se fija por env var (OPENROUTER_KEY),
+    // no editable desde la app.
+    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint', 'openrouter_model'];
     for (const k of allowed) {
       if (b[k] !== undefined) {
         if (k === 'azure_client_secret' && String(b[k]).startsWith('••')) continue; // no sobreescribir con máscara
         if (k === 'bccr_token' && String(b[k]).startsWith('••')) continue;
-        if (k === 'openrouter_key' && String(b[k]).startsWith('••')) continue;
         setSetting(k, k === 'auto_approve' ? (b[k] ? '1' : '0') : b[k]);
       }
     }
