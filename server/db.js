@@ -112,6 +112,8 @@ const DEFAULT_SETTINGS = {
   usd_rate_manual: '0',
   openrouter_key: '',
   openrouter_model: 'z-ai/glm-5.3-flash',
+  sms_webhook_token: '',
+  sms_sender_filter: '+50670701222',
 };
 
 const insSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

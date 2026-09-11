@@ -514,7 +514,7 @@ export function apiRouter() {
     const b = req.body || {};
     // openrouter_key deliberately excluded: la key se fija por env var (OPENROUTER_KEY),
     // no editable desde la app.
-    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint', 'openrouter_model', 'sms_webhook_token'];
+    const allowed = ['currency', 'monthly_budget', 'auto_approve', 'sender_filters', 'sync_days', 'azure_client_id', 'azure_client_secret', 'last_sync_at', 'bccr_email', 'bccr_token', 'usd_rate_manual', 'bccr_endpoint', 'openrouter_model', 'sms_webhook_token', 'sms_sender_filter'];
     for (const k of allowed) {
       if (b[k] !== undefined) {
         if (k === 'azure_client_secret' && String(b[k]).startsWith('••')) continue; // no sobreescribir con máscara
@@ -686,8 +686,13 @@ export function smsWebhookRouter() {
     if (db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(`sms:${messageId}`)) {
       return res.json({ ok: true, duplicate: true });
     }
+    const sender = String(p.sender || p.senderNumber || b.sender || '');
+    const smsSenders = (getSetting('sms_sender_filter') || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (smsSenders.length && !smsSenders.some((f) => sender.includes(f))) {
+      console.log('[sms-webhook] ignorado: remitente no autorizado', sender);
+      return res.json({ ok: true, ignored: true, reason: 'remitente no autorizado' });
+    }
     const receivedAt = p.receivedAt || p.received_at || b.receivedAt || new Date().toISOString();
-    const sender = String(p.sender || p.senderNumber || b.sender || 'sms');
     const baseCurrency = getSetting('currency') || 'CRC';
     const parsed = parseBankEmail({ subject: '', preview: '', body: text, fromAddress: sender, fromName: 'SMS', receivedAt, base: baseCurrency });
     if (!parsed) return res.json({ ok: true, ignored: true, reason: 'sin monto/tipo reconocible' });
