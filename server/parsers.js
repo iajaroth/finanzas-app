@@ -268,3 +268,8 @@ export function parseBankEmail({ subject = '', preview = '', body = '', fromAddr
     confidence: Math.min(confidence, 0.95),
   };
 }
+
+export function extractReference(text = '') {
+  const m = text.match(/[Rr]eferencia\s+([0-9]{10,})|(^|\s)(2026[0-9]{16,})/);
+  return m ? (m[1] || m[3]) : '';
+}

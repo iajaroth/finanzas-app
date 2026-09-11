@@ -1,7 +1,7 @@
 // Sincronización de correo en segundo plano (compartida por el API y el cron nocturno)
 import { db, getSetting, setSetting } from './db.js';
 import { listMessages, getMessageBody } from './graph.js';
-import { parseBankEmail, detectBank } from './parsers.js';
+import { parseBankEmail, detectBank, extractReference } from './parsers.js';
 import { getUsdRate } from './fx.js';
 import { classifyWithAI, openRouterStatus } from './openrouter.js';
 
@@ -85,6 +85,12 @@ export async function runSync() {
         result.skipped++;
         continue;
       }
+    }
+    // dedupe por referencia única (cubre SMS retrasados/reenviados)
+    const ref = extractReference(`${msg.subject} ${msg.preview}`);
+    if (ref && db.prepare("SELECT id FROM email_imports WHERE status != 'rejected' AND snippet LIKE ?").get(`%${ref}%`)) {
+      result.skipped++;
+      continue;
     }
     // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
     // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta

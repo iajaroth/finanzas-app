@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, getSetting, setSetting, allSettings } from './db.js';
 import { azureStatus, authorizeUrl, makeState, exchangeCode, connectionStatus, disconnect, listMessages, getMessageBody, refreshAccountEmail } from './graph.js';
-import { parseBankEmail, detectBank } from './parsers.js';
+import { parseBankEmail, detectBank, extractReference } from './parsers.js';
 import { getUsdRate, fxStatus } from './fx.js';
 import { classifyWithAI, categorizeWithAI, openRouterStatus } from './openrouter.js';
 import { syncState, startSync, matchAccountFor } from './sync.js';
@@ -703,6 +703,12 @@ export function smsWebhookRouter() {
       "SELECT received_at FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ?"
     ).all(parsed.amount, parsed.occurred_at);
     if (dupWin.some((w) => Math.abs(Date.parse(w.received_at || '') - thisT) < 20 * 60_000)) {
+      return res.json({ ok: true, duplicate: true });
+    }
+    // dedupe por referencia única del movimiento (cubre SMS retrasados/reenviados)
+    const ref = extractReference(text);
+    if (ref && db.prepare("SELECT id FROM email_imports WHERE status != 'rejected' AND snippet LIKE ?").get(`%${ref}%`)) {
+      console.log('[sms-webhook] duplicado por referencia', ref);
       return res.json({ ok: true, duplicate: true });
     }
 
