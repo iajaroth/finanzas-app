@@ -144,7 +144,7 @@ export function parseType(text) {
   // - "transferencia SINPE ... ha sido procesada" = movimiento propio entre bancos = transferencia
   if (/transferencia\s+sinpe/i.test(text) && /ha\s+sido\s+procesada/i.test(text)) return 'transfer';
   // - envíos/débitos enviados = gastos
-  if (/env[íi]o\s+exitoso\s+de\s+d[ée]bito|transferencia\s+enviada|enviaste\s+una\s+transferencia|salida\s+por\s+transferencia/i.test(text)) return 'expense';
+  if (/ha[sz]\s+enviado\s+[\d.,]+|env[íi]o\s+exitoso\s+de\s+d[ée]bito|transferencia\s+enviada|enviaste\s+una\s+transferencia|salida\s+por\s+transferencia/i.test(text)) return 'expense';
   let income = 0, expense = 0;
   for (const re of INCOME_RE) if (re.test(text)) income++;
   for (const re of EXPENSE_RE) if (re.test(text)) expense++;
