@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { authRouter, requireAuth } from './auth.js';
-import { apiRouter } from './routes.js';
+import { apiRouter, smsWebhookRouter } from './routes.js';
 import { startNightlyCron } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +23,8 @@ app.use((req, res, next) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 app.use('/api/auth', authRouter());
+// webhook de SMS Gate: público pero protegido por su propio token (SMS_WEBHOOK_TOKEN)
+app.use('/api/sms', smsWebhookRouter());
 app.use('/api', requireAuth, apiRouter());
 
 app.use((err, _req, res, _next) => {

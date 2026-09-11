@@ -525,79 +525,6 @@ export function apiRouter() {
     res.json({ ok: true });
   });
 
-  // ---- SMS directo (SMS Gate en el teléfono) ----
-  // El Android app dispara POST aquí por cada SMS recibido; se parsea, deduplica
-  // contra el correo (±20 min) y se registra al instante.
-  r.post('/sms/webhook', async (req, res) => {
-    const token = process.env.SMS_WEBHOOK_TOKEN || getSetting('sms_webhook_token') || '';
-    if (!token) return res.status(500).json({ error: 'Falta el token SMS en el servidor.' });
-    const given = String(req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || '');
-    if (given !== token) return res.status(401).json({ error: 'Token inválido.' });
-    const b = req.body || {};
-    const p = b.payload || b;
-    const text = String(p.message || p.text || b.message || b.text || '').slice(0, 2000);
-    if (!text) return res.status(400).json({ error: 'Sin mensaje.' });
-    const messageId = String(p.messageId || p.id || b.id || `sms-${Date.now()}`);
-    if (db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(`sms:${messageId}`)) {
-      return res.json({ ok: true, duplicate: true });
-    }
-    const receivedAt = p.receivedAt || p.received_at || b.receivedAt || new Date().toISOString();
-    const sender = String(p.sender || p.senderNumber || b.sender || 'sms');
-    const baseCurrency = getSetting('currency') || 'CRC';
-    const parsed = parseBankEmail({ subject: '', preview: '', body: text, fromAddress: sender, fromName: 'SMS', receivedAt, base: baseCurrency });
-    if (!parsed) return res.json({ ok: true, ignored: true, reason: 'sin monto/tipo reconocible' });
-
-    // anti-duplicado con el correo del banco (mismo movimiento, ±20 min)
-    const thisT = Date.parse(receivedAt) || Date.now();
-    const dupWin = db.prepare(
-      "SELECT received_at FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ?"
-    ).all(parsed.amount, parsed.occurred_at);
-    if (dupWin.some((w) => Math.abs(Date.parse(w.received_at || '') - thisT) < 20 * 60_000)) {
-      return res.json({ ok: true, duplicate: true });
-    }
-
-    const accounts = db.prepare('SELECT * FROM accounts WHERE archived = 0').all();
-    const cats = db.prepare('SELECT * FROM categories').all();
-    const acc = matchAccountFor(accounts, parsed.bank, parsed.last4);
-    let ai = null;
-    if (openRouterStatus().configured) {
-      ai = await classifyWithAI({ subject: 'SMS', snippet: text, fromEmail: sender, accounts });
-    }
-    let fxRate = 1;
-    if (parsed.currency !== baseCurrency) fxRate = (await getUsdRate(parsed.occurred_at)).rate || 0;
-    const validAcc = (id) => accounts.some((a) => a.id === id);
-    let effType = parsed.type;
-    let effFrom = acc?.id ?? null;
-    let effTo = null;
-    let effCat = parsed.type === 'transfer' ? null : (cats.find((c) => c.name === parsed.category_name)?.id || null);
-    let confThreshold = parsed.confidence;
-    if (ai && ai.confianza >= 0.6) {
-      if (ai.tipo === 'transfer' && validAcc(ai.cuenta_origen) && validAcc(ai.cuenta_destino)) {
-        effType = 'transfer'; effFrom = ai.cuenta_origen; effTo = ai.cuenta_destino; effCat = null;
-      } else if (ai.tipo === 'income' || ai.tipo === 'expense') {
-        effType = ai.tipo;
-        const accId = ai.tipo === 'income' ? ai.cuenta_destino : ai.cuenta_origen;
-        if (validAcc(accId)) effFrom = accId;
-      }
-      confThreshold = ai.confianza;
-    }
-    db.prepare(`
-      INSERT OR IGNORE INTO email_imports (message_id, bank, from_email, subject, snippet, weblink, type, amount, merchant, occurred_at, category_id, account_id, confidence, status, received_at, currency)
-      VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`
-    ).run(`sms:${messageId}`, parsed.bank, sender, text.slice(0, 140), text.slice(0, 280),
-      effType, parsed.amount, parsed.merchant, parsed.occurred_at, effCat, effFrom,
-      parsed.confidence, receivedAt, parsed.currency);
-    if (getSetting('auto_approve') !== '1' || confThreshold < 0.5) {
-      return res.json({ ok: true, queued: true });
-    }
-    const txInfo = db.prepare(
-      'INSERT INTO transactions (account_id, transfer_to_id, category_id, type, amount, currency, fx_rate, merchant, description, occurred_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(effFrom, effTo, effType === 'transfer' ? null : effCat, effType, parsed.amount, parsed.currency, fxRate,
-      parsed.merchant, `[SMS] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}`,
-      parsed.occurred_at, 'sms');
-    res.json({ ok: true, created: true, id: txInfo.lastInsertRowid, type: effType });
-  });
-
   // ---- tipo de cambio ----
   r.get('/fx/usd', async (req, res) => {
     try {
@@ -736,4 +663,84 @@ ${recent}`;
   });
 
   return r;
+}
+
+
+export function smsWebhookRouter() {
+  const w = Router();
+  // ---- SMS directo (SMS Gate en el teléfono) ----
+  // El Android app dispara POST aquí por cada SMS recibido; se parsea, deduplica
+  // contra el correo (±20 min) y se registra al instante.
+  w.post('/sms/webhook', async (req, res) => {
+    const token = process.env.SMS_WEBHOOK_TOKEN || getSetting('sms_webhook_token') || '';
+    if (!token) return res.status(500).json({ error: 'Falta el token SMS en el servidor.' });
+    const given = String(req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || '');
+    if (given !== token) return res.status(401).json({ error: 'Token inválido.' });
+    const b = req.body || {};
+    const p = b.payload || b;
+    const text = String(p.message || p.text || b.message || b.text || '').slice(0, 2000);
+    if (!text) return res.status(400).json({ error: 'Sin mensaje.' });
+    const messageId = String(p.messageId || p.id || b.id || `sms-${Date.now()}`);
+    if (db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(`sms:${messageId}`)) {
+      return res.json({ ok: true, duplicate: true });
+    }
+    const receivedAt = p.receivedAt || p.received_at || b.receivedAt || new Date().toISOString();
+    const sender = String(p.sender || p.senderNumber || b.sender || 'sms');
+    const baseCurrency = getSetting('currency') || 'CRC';
+    const parsed = parseBankEmail({ subject: '', preview: '', body: text, fromAddress: sender, fromName: 'SMS', receivedAt, base: baseCurrency });
+    if (!parsed) return res.json({ ok: true, ignored: true, reason: 'sin monto/tipo reconocible' });
+
+    // anti-duplicado con el correo del banco (mismo movimiento, ±20 min)
+    const thisT = Date.parse(receivedAt) || Date.now();
+    const dupWin = db.prepare(
+      "SELECT received_at FROM email_imports WHERE status != 'rejected' AND amount = ? AND occurred_at = ?"
+    ).all(parsed.amount, parsed.occurred_at);
+    if (dupWin.some((w) => Math.abs(Date.parse(w.received_at || '') - thisT) < 20 * 60_000)) {
+      return res.json({ ok: true, duplicate: true });
+    }
+
+    const accounts = db.prepare('SELECT * FROM accounts WHERE archived = 0').all();
+    const cats = db.prepare('SELECT * FROM categories').all();
+    const acc = matchAccountFor(accounts, parsed.bank, parsed.last4);
+    let ai = null;
+    if (openRouterStatus().configured) {
+      ai = await classifyWithAI({ subject: 'SMS', snippet: text, fromEmail: sender, accounts });
+    }
+    let fxRate = 1;
+    if (parsed.currency !== baseCurrency) fxRate = (await getUsdRate(parsed.occurred_at)).rate || 0;
+    const validAcc = (id) => accounts.some((a) => a.id === id);
+    let effType = parsed.type;
+    let effFrom = acc?.id ?? null;
+    let effTo = null;
+    let effCat = parsed.type === 'transfer' ? null : (cats.find((c) => c.name === parsed.category_name)?.id || null);
+    let confThreshold = parsed.confidence;
+    if (ai && ai.confianza >= 0.6) {
+      if (ai.tipo === 'transfer' && validAcc(ai.cuenta_origen) && validAcc(ai.cuenta_destino)) {
+        effType = 'transfer'; effFrom = ai.cuenta_origen; effTo = ai.cuenta_destino; effCat = null;
+      } else if (ai.tipo === 'income' || ai.tipo === 'expense') {
+        effType = ai.tipo;
+        const accId = ai.tipo === 'income' ? ai.cuenta_destino : ai.cuenta_origen;
+        if (validAcc(accId)) effFrom = accId;
+      }
+      confThreshold = ai.confianza;
+    }
+    db.prepare(`
+      INSERT OR IGNORE INTO email_imports (message_id, bank, from_email, subject, snippet, weblink, type, amount, merchant, occurred_at, category_id, account_id, confidence, status, received_at, currency)
+      VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?)`
+    ).run(`sms:${messageId}`, parsed.bank, sender, text.slice(0, 140), text.slice(0, 280),
+      effType, parsed.amount, parsed.merchant, parsed.occurred_at, effCat, effFrom,
+      parsed.confidence, receivedAt, parsed.currency);
+    if (getSetting('auto_approve') !== '1' || confThreshold < 0.5) {
+      return res.json({ ok: true, queued: true });
+    }
+    const txInfo = db.prepare(
+      'INSERT INTO transactions (account_id, transfer_to_id, category_id, type, amount, currency, fx_rate, merchant, description, occurred_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(effFrom, effTo, effType === 'transfer' ? null : effCat, effType, parsed.amount, parsed.currency, fxRate,
+      parsed.merchant, `[SMS] ${parsed.bank}${parsed.merchant ? ` · ${parsed.merchant}` : ''}`,
+      parsed.occurred_at, 'sms');
+    res.json({ ok: true, created: true, id: txInfo.lastInsertRowid, type: effType });
+  });
+
+
+  return w;
 }
