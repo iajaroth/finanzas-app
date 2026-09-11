@@ -672,15 +672,17 @@ export function smsWebhookRouter() {
   // El Android app dispara POST aquí por cada SMS recibido; se parsea, deduplica
   // contra el correo (±20 min) y se registra al instante.
   w.post('/webhook', async (req, res) => {
+    console.log('[sms-webhook] petición recibida del dispositivo');
     const token = process.env.SMS_WEBHOOK_TOKEN || getSetting('sms_webhook_token') || '';
     if (!token) return res.status(500).json({ error: 'Falta el token SMS en el servidor.' });
     const given = String(req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || '');
-    if (given !== token) return res.status(401).json({ error: 'Token inválido.' });
+    if (given !== token) { console.log('[sms-webhook] rechazado: token inválido'); return res.status(401).json({ error: 'Token inválido.' }); }
     const b = req.body || {};
     const p = b.payload || b;
     const text = String(p.message || p.text || b.message || b.text || '').slice(0, 2000);
     if (!text) return res.status(400).json({ error: 'Sin mensaje.' });
     const messageId = String(p.messageId || p.id || b.id || `sms-${Date.now()}`);
+    console.log(`[sms-webhook] mensaje: "${text.slice(0, 120)}"`);
     if (db.prepare('SELECT id FROM email_imports WHERE message_id = ?').get(`sms:${messageId}`)) {
       return res.json({ ok: true, duplicate: true });
     }
