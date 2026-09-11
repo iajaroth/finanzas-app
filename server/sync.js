@@ -14,6 +14,24 @@ export const syncState = {
   total: 0,
 };
 
+// match de cuenta: últimos 4 dígitos primero; banco con una sola cuenta; si es ambiguo, null
+export function matchAccountFor(accounts, bankName, last4) {
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const pb = norm(bankName);
+  const sameBank = (a) => {
+    const ab = norm(a.bank);
+    return (ab && pb && (ab.includes(pb) || pb.includes(ab))) || norm(a.name).includes(pb);
+  };
+  if (last4) {
+    const byLast4 = accounts.filter((a) => a.last4 === last4);
+    if (byLast4.length === 1) return byLast4[0];
+    const byBoth = byLast4.find(sameBank);
+    if (byBoth) return byBoth;
+  }
+  const bankAccounts = accounts.filter(sameBank);
+  return bankAccounts.length === 1 ? bankAccounts[0] : null;
+}
+
 export async function runSync() {
   const now = Date.now();
   const lastSync = getSetting('last_sync_at');
@@ -70,23 +88,7 @@ export async function runSync() {
     }
     // con varias tarjetas por banco: matchea por últimos 4 dígitos; si el banco
     // tiene una sola cuenta, asigna esa; si es ambiguo, deja sin cuenta
-    const matchAccount = () => {
-      const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const pb = norm(parsed.bank);
-      const sameBank = (a) => {
-        const ab = norm(a.bank);
-        return (ab && pb && (ab.includes(pb) || pb.includes(ab))) || norm(a.name).includes(pb);
-      };
-      if (parsed.last4) {
-        const byLast4 = accounts.filter((a) => a.last4 === parsed.last4);
-        if (byLast4.length === 1) return byLast4[0];
-        const byBoth = byLast4.find(sameBank);
-        if (byBoth) return byBoth;
-      }
-      const bankAccounts = accounts.filter(sameBank);
-      return bankAccounts.length === 1 ? bankAccounts[0] : null;
-    };
-    const acc = matchAccount();
+    const acc = matchAccountFor(accounts, parsed.bank, parsed.last4);
     // clasificación con IA (opcional): corrige tipo y detecta transferencias propias
     let ai = null;
     if (openRouterStatus().configured) {

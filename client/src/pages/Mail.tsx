@@ -308,6 +308,26 @@ export default function Mail() {
       )}
 
       <section className="card fade-in">
+        <div className="card-title"><h3>SMS directo (SMS Gate)</h3><span className="hint">instantáneo, sin esperar sync</span></div>
+        <p style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)', margin: '0 0 10px' }}>
+          Registra este webhook en la app SMS Gate de tu teléfono para que cada SMS del banco se convierta en transacción al instante:
+        </p>
+        <code className="amount" style={{ display: 'block', background: 'var(--paper-3)', padding: '10px 12px', borderRadius: 10, fontSize: 'var(--text-xs)', wordBreak: 'break-all', userSelect: 'all' }}>
+          {status?.sms_webhook?.url}?token={status?.sms_webhook?.token || '…'}
+        </code>
+        <details className="azure" style={{ marginTop: 12 }}>
+          <summary>Cómo registrar el webhook en tu teléfono (2 min)</summary>
+          <ol>
+            <li>En la app SMS Gate anota la <strong>Dirección Web</strong> (ej. <code>http://192.168.1.50:8080</code>) y el <strong>usuario/contraseña</strong> (Ajustes → Credenciales del dispositivo).</li>
+            <li>Con el teléfono en el mismo WiFi que tu PC, abre <code>http://ESA-DIRECCION</code> en el navegador, inicia sesión y busca la sección <strong>Webhooks</strong> → agrega la URL de arriba y el evento <code>sms:received</code>.</li>
+            <li>Si tu versión no muestra esa sección, desde una terminal de la PC ejecuta (reemplaza IP/usuario/contraseña):<br />
+              <code>{`curl -X POST http://IP:8080/webhooks -u usuario:contraseña -H "Content-Type: application/json" -d '{"id":"finanzas","url":"${status?.sms_webhook?.url || ''}?token=${status?.sms_webhook?.token || ''}","event":"sms:received"}'`}</code></li>
+            <li>Mándate un SMS de prueba del banco → debe aparecer al instante en Movimientos.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section className="card fade-in">
         <div className="card-title">
           <h3>Por revisar</h3>
           {imports.length > 0 && (

@@ -108,6 +108,7 @@ export interface EmailStatus {
   sync_total?: number;
   last_sync_result?: { scanned: number; created: number; pending: number; skipped: number } | null;
   last_sync_error?: string | null;
+  sms_webhook?: { token: string; url: string };
 }
 
 export interface Settings {

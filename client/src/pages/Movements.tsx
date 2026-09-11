@@ -286,6 +286,7 @@ export default function Movements() {
                       <div className="tx-merchant">
                         {t.merchant || t.description || (t.type === 'transfer' ? `${t.account_name || 'Cuenta'} → ${t.transfer_to_name}` : t.category_name || 'Movimiento')}
                         {t.source === 'email' && <span className="chip chip-gold" style={{ marginLeft: 8, padding: '1px 8px' }}>correo</span>}
+                        {t.source === 'sms' && <span className="chip chip-sky" style={{ marginLeft: 8, padding: '1px 8px' }}>SMS</span>}
                       </div>
                       <div className="tx-desc">
                         {t.type === 'transfer' ? 'Transferencia' : t.category_name || 'Sin categoría'}
