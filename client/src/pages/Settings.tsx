@@ -113,6 +113,16 @@ export default function SettingsPage() {
     setAiBusy(false);
   }
 
+  async function recategorize() {
+    setAiBusy(true);
+    try {
+      const r = await api.post<{ processed: number; updated: number; skipped: number }>('/ai/recategorize');
+      toast(`IA: ${r.updated} gastos recategorizados de ${r.processed}`);
+      load();
+    } catch (e) { toast((e as Error).message, true); }
+    setAiBusy(false);
+  }
+
   async function deleteCategory(id: number) {
     if (confirmDelete !== id) { setConfirmDelete(id); return; }
     await api.del(`/categories/${id}`);
@@ -185,10 +195,13 @@ export default function SettingsPage() {
             <input className="input" value={orModel} onChange={(e) => setOrModel(e.target.value)} placeholder="openai/gpt-4o-mini" />
           </Field>
         </div>
-        <div className="modal-actions" style={{ justifyContent: 'flex-start' }}>
+        <div className="modal-actions" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
           <button className="btn btn-subtle" onClick={saveAi}>Guardar IA</button>
           <button className="btn btn-primary" disabled={aiBusy || !settings?.openrouter?.configured} onClick={reclassify}>
             {aiBusy ? 'Reclasificando…' : 'Reclasificar movimientos sin cuenta'}
+          </button>
+          <button className="btn btn-ghost" disabled={aiBusy || !settings?.openrouter?.configured} onClick={recategorize}>
+            Recategorizar gastos genéricos
           </button>
         </div>
       </section>

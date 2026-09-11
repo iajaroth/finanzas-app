@@ -223,7 +223,19 @@ export function guessCategory(merchant = '', text = '', kind = 'expense') {
 
 // ---- Parser principal ----
 
+// correos publicitarios: ofrecen montos ("te prestatamos ₡500.000") que no son movimientos
+export function isMarketing(subject = '', from = '', text = '') {
+  // emojis en el asunto = promo (las alertas reales no usan emojis)
+  if (/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{FE0F}]/u.test(subject)) return true;
+  // remitentes de campañas (p. ej. info@info.baccredomatic.net)
+  if (/@(info|promociones|promo|marketing|news|newsletter|campaigns|email)\./i.test(from)) return true;
+  // lenguaje de oferta
+  if (/solic[íi]t[ae]l[oa]?|aprov[ée]ch|promoci[óo]n\s|descuento\s|sin\s+inter[ée]ses|d[áa]te\s+ese\s+gusto|tenerle\s+al\s+tanto|no\s+te\s+lo\s+pierdas|oferta\s+exclusiva|prestamo\s+preaprobado|compra\s+ahora\s+y\s+pag[áa]/i.test(text)) return true;
+  return false;
+}
+
 export function parseBankEmail({ subject = '', preview = '', body = '', fromAddress = '', fromName = '', receivedAt, base = 'CRC' }) {
+  if (isMarketing(subject, fromAddress, `${subject} ${preview} ${body}`.slice(0, 1500))) return null;
   const bank = detectBank(fromAddress, fromName);
   const text = `${subject} ${preview}`;
   const searchText = body ? `${text} ${body.replace(/\s{2,}/g, ' ').slice(0, 4000)}` : text;

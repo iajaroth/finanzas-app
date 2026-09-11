@@ -71,3 +71,30 @@ Reglas:
     return null;
   }
 }
+
+// Recategorización: asigna una categoría de gasto existente a un movimiento
+export async function categorizeWithAI({ detail = '', amount = 0, categories = [] }) {
+  const { key, model, configured } = openRouterConfig();
+  if (!configured || !categories.length) return null;
+  const sys = `Clasificas gastos personales en Costa Rica. Devuelve ÚNICAMENTE el nombre exacto de UNA categoría de esta lista, sin nada más:
+${categories.map((c) => `- ${c.name}`).join('\n')}`;
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
+      body: JSON.stringify({
+        model, temperature: 0.1, max_tokens: 4000, reasoning: { exclude: true },
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: `Detalle: ${detail}\nMonto: ₡${Math.round(amount / 100)}` }],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const msg = data.choices?.[0]?.message || {};
+    const text = (msg.content || '').trim() || String(msg.reasoning || '').split('\n').filter(Boolean).slice(-1)[0] || '';
+    const clean = text.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñü\s]/g, '').trim();
+    return categories.find((c) => c.name.toLowerCase() === clean.toLowerCase())?.name ?? null;
+  } catch {
+    return null;
+  }
+}

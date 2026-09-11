@@ -3,7 +3,7 @@ import { db, getSetting, setSetting, allSettings } from './db.js';
 import { azureStatus, authorizeUrl, makeState, exchangeCode, connectionStatus, disconnect, listMessages, getMessageBody, refreshAccountEmail } from './graph.js';
 import { parseBankEmail, detectBank } from './parsers.js';
 import { getUsdRate, fxStatus } from './fx.js';
-import { classifyWithAI, openRouterStatus } from './openrouter.js';
+import { classifyWithAI, categorizeWithAI, openRouterStatus } from './openrouter.js';
 import { syncState, startSync } from './sync.js';
 
 // ---------- helpers ----------
@@ -439,6 +439,27 @@ export function apiRouter() {
   r.delete('/email/imports/:id', (req, res) => {
     db.prepare('DELETE FROM email_imports WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
+  });
+
+  // recategoriza con IA los gastos que quedaron en "Otros gastos"
+  r.post('/ai/recategorize', async (_req, res) => {
+    if (!openRouterStatus().configured) return res.status(400).json({ error: 'Configura tu API key de OpenRouter en Ajustes primero.' });
+    const cats = db.prepare("SELECT * FROM categories WHERE kind = 'expense' AND name != 'Otros gastos'").all();
+    if (!cats.length) return res.status(400).json({ error: 'No hay categorías de gasto.' });
+    const rows = db.prepare(`
+      SELECT t.id, t.amount, COALESCE(NULLIF(t.merchant, ''), t.description, 'Sin detalle') AS detail
+      FROM transactions t JOIN categories c ON c.id = t.category_id
+      WHERE c.name = 'Otros gastos' AND t.type = 'expense'
+      ORDER BY t.occurred_at DESC LIMIT 150`).all();
+    let updated = 0, skipped = 0;
+    for (const row of rows) {
+      const name = await categorizeWithAI({ detail: row.detail, amount: row.amount, categories: cats });
+      const cat = name ? cats.find((c) => c.name === name) : null;
+      if (!cat) { skipped++; continue; }
+      db.prepare('UPDATE transactions SET category_id = ? WHERE id = ?').run(cat.id, row.id);
+      updated++;
+    }
+    res.json({ processed: rows.length, updated, skipped });
   });
 
   // reclasifica con IA los movimientos de correo que quedaron sin cuenta
