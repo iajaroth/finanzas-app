@@ -671,7 +671,7 @@ export function smsWebhookRouter() {
   // ---- SMS directo (SMS Gate en el teléfono) ----
   // El Android app dispara POST aquí por cada SMS recibido; se parsea, deduplica
   // contra el correo (±20 min) y se registra al instante.
-  w.post('/sms/webhook', async (req, res) => {
+  w.post('/webhook', async (req, res) => {
     const token = process.env.SMS_WEBHOOK_TOKEN || getSetting('sms_webhook_token') || '';
     if (!token) return res.status(500).json({ error: 'Falta el token SMS en el servidor.' });
     const given = String(req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || '');
