@@ -88,8 +88,8 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
     setOcrBusy(true);
     try {
       const dataUrl = await downscaleImage(file);
-      const r = await api.post<{ tipo: TxType; monto: number; moneda: string; fecha: string; comercio: string; concepto: string }>('/ai/ocr', { image: dataUrl });
-      const centsOcr = parseMoneyInput(String(r.monto)) ?? 0;
+      const r = await api.post<{ tipo: TxType; monto_cents: number; moneda: string; fecha: string; comercio: string; concepto: string }>('/ai/ocr', { image: dataUrl });
+      const centsOcr = r.monto_cents ?? 0;
       if (centsOcr <= 0) throw new Error('No pude leer el monto de la imagen');
       const body = {
         type: r.tipo as TxType,

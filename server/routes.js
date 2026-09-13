@@ -560,12 +560,23 @@ Reglas: income = el usuario RECIBIÓ dinero (Ha recibido, abono, pago recibido);
       const m = text.match(/\{[\s\S]*\}/);
       if (!m) throw new Error('no se pudo leer la imagen');
       const j = JSON.parse(m[0]);
+      const toCents = (m) => {
+        if (typeof m === 'number' && Number.isFinite(m)) return Math.round(m * 100);
+        let t = String(m ?? '').trim();
+        if (!t) return 0;
+        const hasC = t.includes(','), hasD = t.includes('.');
+        if (hasC && hasD) t = t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+        else if (hasC) t = t.replace(',', '.');
+        const n = parseFloat(t.replace(/[^\d.]/g, ''));
+        return Number.isFinite(n) ? Math.round(n * 100) : 0;
+      };
       const tipo = j.tipo === 'income' ? 'income' : 'expense';
       const monto = Number(String(j.monto).replace(/[^\d.]/g, ''));
       const moneda = /usd/i.test(j.moneda || '') ? 'USD' : 'CRC';
       const fecha = /^\d{4}-\d{2}-\d{2}$/.test(j.fecha || '') ? j.fecha : new Date().toISOString().slice(0, 10);
-      if (!Number.isFinite(monto) || monto <= 0) throw new Error('monto no reconocido');
-      res.json({ tipo, monto, moneda, fecha, comercio: String(j.comercio || '').slice(0, 60), concepto: String(j.concepto || '').slice(0, 80) });
+      const monto_cents = toCents(j.monto);
+      if (!monto_cents) throw new Error('monto no reconocido');
+      res.json({ tipo, monto: monto_cents / 100, monto_cents, moneda, fecha, comercio: String(j.comercio || '').slice(0, 60), concepto: String(j.concepto || '').slice(0, 80) });
     } catch (e) {
       res.status(502).json({ error: `OCR falló: ${e.message}` });
     }
