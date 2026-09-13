@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import type { Account, Category, Tx, TxType } from '../types';
@@ -18,6 +18,28 @@ interface TxDraft {
   merchant: string;
   description: string;
   notes: string;
+}
+
+async function downscaleImage(file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Imagen inválida'));
+    i.src = dataUrl;
+  });
+  const max = 1024;
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
 }
 
 function draftFrom(tx?: Tx | null, base = 'CRC'): TxDraft {
@@ -42,6 +64,9 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [fx, setFx] = useState<{ rate: number; source: string } | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
   const set = (patch: Partial<TxDraft>) => setDraft({ ...draft, ...patch });
   const cats = categories.filter((c) => (draft.type === 'income' ? c.kind === 'income' : c.kind === 'expense'));
   const cents = parseMoneyInput(draft.amountText);
@@ -57,6 +82,24 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.currency, draft.occurred_at, cents]);
+
+  // OCR: escanea un comprobante y pre-llena el formulario con GLM
+  async function handleScan(file: File) {
+    setOcrBusy(true);
+    try {
+      const dataUrl = await downscaleImage(file);
+      const r = await api.post<{ tipo: TxType; monto: number; moneda: string; fecha: string; comercio: string; concepto: string }>('/ai/ocr', { image: dataUrl });
+      set({
+        type: r.tipo as TxType,
+        amountText: String(r.monto),
+        currency: r.moneda || currency,
+        occurred_at: r.fecha || todayISO(),
+        merchant: r.comercio || r.concepto || '',
+      });
+      toast('Comprobante leído — revisa y guarda');
+    } catch (e) { toast((e as Error).message, true); }
+    setOcrBusy(false);
+  }
 
   async function save() {
     if (!valid) return;
@@ -87,6 +130,12 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
 
   return (
     <Modal title={draft.id ? 'Editar movimiento' : 'Nuevo movimiento'} onClose={onClose} wide>
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScan(f); e.target.value = ''; }} />
+      <button type="button" className="btn btn-ghost" style={{ width: '100%', marginBottom: 12 }}
+        disabled={ocrBusy} onClick={() => fileRef.current?.click()}>
+        {ocrBusy ? 'Leyendo comprobante con IA…' : 'Escanear comprobante (foto o pantalla)'}
+      </button>
       <div className="seg mb-4" role="tablist">
         {([['expense', 'Gasto'], ['income', 'Ingreso'], ['transfer', 'Transferencia']] as const).map(([v, label]) => (
           <button key={v} type="button" className={draft.type === v ? 'active' : ''} onClick={() => set({ type: v })}>{label}</button>

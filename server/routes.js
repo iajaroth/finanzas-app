@@ -525,6 +525,47 @@ export function apiRouter() {
     res.json({ ok: true });
   });
 
+  // OCR: extrae datos de un comprobante/pantallazo de pago con visión de GLM
+  r.post('/ai/ocr', async (req, res) => {
+    if (!openRouterStatus().configured) return res.status(400).json({ error: 'Configura tu API key de OpenRouter en Ajustes primero.' });
+    const image = String(req.body?.image || '');
+    if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) return res.status(400).json({ error: 'Envía una imagen (data URL jpeg/png/webp).' });
+    const { key, model } = openRouterStatus();
+    const sys = `Extraes datos de comprobantes de pago, capturas de SINPE o pantallas bancarias de Costa Rica. Hoy es ${new Date().toISOString().slice(0, 10)}.
+Responde ÚNICAMENTE un JSON válido, sin texto extra:
+{"tipo":"income|expense","monto":<número en colones o dólares>,"moneda":"CRC|USD","fecha":"YYYY-MM-DD","comercio":"nombre del comercio o persona","concepto":"breve concepto"}
+Reglas: income = el usuario RECIBIÓ dinero (Ha recibido, abono, pago recibido); expense = el usuario PAGÓ (compra, Haz enviado, pago realizado). Si la fecha no es visible usa hoy. Si la moneda no es clara, CRC.`;
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
+        body: JSON.stringify({
+          model, temperature: 0.1, max_tokens: 4000, reasoning: { exclude: true },
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: 'Extrae los datos de esta imagen de pago:' },
+            { type: 'image_url', image_url: { url: image } },
+          ] }],
+        }),
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (!r.ok) throw new Error(`OpenRouter ${r.status}`);
+      const data = await r.json();
+      const msg = data.choices?.[0]?.message || {};
+      const text = (msg.content || '').trim() || String(msg.reasoning || '').slice(-300);
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('no se pudo leer la imagen');
+      const j = JSON.parse(m[0]);
+      const tipo = j.tipo === 'income' ? 'income' : 'expense';
+      const monto = Number(String(j.monto).replace(/[^\d.]/g, ''));
+      const moneda = /usd/i.test(j.moneda || '') ? 'USD' : 'CRC';
+      const fecha = /^\d{4}-\d{2}-\d{2}$/.test(j.fecha || '') ? j.fecha : new Date().toISOString().slice(0, 10);
+      if (!Number.isFinite(monto) || monto <= 0) throw new Error('monto no reconocido');
+      res.json({ tipo, monto, moneda, fecha, comercio: String(j.comercio || '').slice(0, 60), concepto: String(j.concepto || '').slice(0, 80) });
+    } catch (e) {
+      res.status(502).json({ error: `OCR falló: ${e.message}` });
+    }
+  });
+
   // ---- tipo de cambio ----
   r.get('/fx/usd', async (req, res) => {
     try {
