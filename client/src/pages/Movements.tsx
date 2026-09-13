@@ -83,20 +83,29 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.currency, draft.occurred_at, cents]);
 
-  // OCR: escanea un comprobante y pre-llena el formulario con GLM
+  // OCR: escanea un comprobante y CREA la transacción directamente
   async function handleScan(file: File) {
     setOcrBusy(true);
     try {
       const dataUrl = await downscaleImage(file);
       const r = await api.post<{ tipo: TxType; monto: number; moneda: string; fecha: string; comercio: string; concepto: string }>('/ai/ocr', { image: dataUrl });
-      set({
+      const centsOcr = parseMoneyInput(String(r.monto)) ?? 0;
+      if (centsOcr <= 0) throw new Error('No pude leer el monto de la imagen');
+      const body = {
         type: r.tipo as TxType,
-        amountText: String(r.monto),
+        amount: centsOcr,
         currency: r.moneda || currency,
         occurred_at: r.fecha || todayISO(),
-        merchant: r.comercio || r.concepto || '',
-      });
-      toast('Comprobante leído — revisa y guarda');
+        account_id: draft.account_id ? Number(draft.account_id) : null,
+        transfer_to_id: null,
+        category_id: null,
+        merchant: (r.comercio || '').trim(),
+        description: [r.concepto, 'Creado con OCR'].filter(Boolean).join(' · '),
+        notes: '',
+      };
+      await api.post('/transactions', body);
+      onSave();
+      toast('Creado: ' + (r.tipo === 'income' ? 'ingreso' : 'gasto') + ' — búscalo por la fecha para editarlo si falta algo');
     } catch (e) { toast((e as Error).message, true); }
     setOcrBusy(false);
   }
