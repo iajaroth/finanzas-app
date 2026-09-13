@@ -199,7 +199,7 @@ export function extractLast4(text = '') {
 // ---- Categoría sugerida por comercio/palabra clave ----
 
 const CATEGORY_RULES = [
-  ['Transporte', /uber|didi|cabify|taxi|gasolin|petro|combustib|parquead|peaje|metro|transmilenio|sitr/i],
+  ['Transporte', /uber|didi|cabify|taxi|gasolin|petro|combustib|parquead|peaje|metro|transmilenio|sitr|tiquete|bus/i],
   ['Supermercado', /supermerc|super\s(olivo|fino|mas)\b|d1\b|tiendas ara|exito|éxito|jumbo|olimpica|olímpica|carrefour|mercadona|wal-mart|walmart|costco|arian|la rebaja|supertienda|surtidor/i],
   ['Restaurantes', /restaurante|mcdonald|burger|pizza|sushi|cafe|café|starbucks|juan valdez|comida|rappi restaurant/i],
   ['Suscripciones', /netflix|spotify|disney|hbo|max\b|prime video|crunchyroll|youtube premium|apple music|deezer|canva|notion|openai|chatgpt|claude|icloud|onedrive|dropbox/i],

@@ -695,6 +695,8 @@ export function smsWebhookRouter() {
     const receivedAt = p.receivedAt || p.received_at || b.receivedAt || new Date().toISOString();
     const baseCurrency = getSetting('currency') || 'CRC';
     const parsed = parseBankEmail({ subject: '', preview: '', body: text, fromAddress: sender, fromName: 'SMS', receivedAt, base: baseCurrency });
+    // el gateway autorizado de los bancos es fuente confiable: suma confianza
+    if (smsSenders.length && smsSenders.some((f) => sender.includes(f))) parsed.confidence = Math.min(parsed.confidence + 0.25, 0.95);
     if (!parsed) return res.json({ ok: true, ignored: true, reason: 'sin monto/tipo reconocible' });
 
     // anti-duplicado con el correo del banco (mismo movimiento, ±20 min)
