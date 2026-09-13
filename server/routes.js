@@ -542,8 +542,10 @@ Reglas: income = el usuario RECIBIÓ dinero (Ha recibido, abono, pago recibido);
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://financiera.jbsautomation.online', 'X-Title': 'finanzas' },
         body: JSON.stringify({
           model, temperature: 0.1, max_tokens: 4000, reasoning: { exclude: true },
-          messages: [{ role: 'user', content: [
-            { type: 'text', text: 'Extrae los datos de esta imagen de pago:' },
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: [
+            { type: 'text', text: 'Extrae los datos de esta imagen de pago. Usa exactamente la estructura JSON del sistema:' },
             { type: 'image_url', image_url: { url: image } },
           ] }],
         }),
