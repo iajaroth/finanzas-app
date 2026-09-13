@@ -1,4 +1,4 @@
-import { type ReactNode, type FormEvent, useEffect } from 'react';
+import { type ReactNode, type FormEvent, useEffect, useState } from 'react';
 import * as Icons from 'lucide-react';
 import { matchBrand, readableText } from './brands';
 import { clearToken, getToken } from './api';
@@ -31,16 +31,19 @@ export function CategoryIcon({ icon, color, size = 18 }: { icon?: string | null;
   );
 }
 
-// Logo real del comercio si existe (SVG en /brands) o monograma de marca;
-// si no hay marca reconocida, cae al icono de categoría.
+// Logo real del comercio si existe (SVG en /brands/<key>.svg — basta con soltar el
+// archivo con ese nombre) o monograma de marca; si no hay marca, icono de categoría.
 export function MerchantBadge({ merchant, icon, color, size = 38 }: {
   merchant?: string | null; icon?: string | null; color?: string | null; size?: number;
 }) {
   const brand = matchBrand(merchant || '');
-  if (brand?.file) {
+  const [imgFail, setImgFail] = useState(false);
+  const file = brand ? (brand.file ?? brand.key) : null;
+  if (brand && file && !imgFail) {
     return (
       <span className="tx-icon" style={{ background: '#ffffff', width: size, height: size }}>
-        <img src={`/brands/${brand.file}.svg`} alt={brand.name} width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} loading="lazy" />
+        <img src={`/brands/${file}.svg`} alt={brand.name} width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} loading="lazy"
+          onError={() => setImgFail(true)} />
       </span>
     );
   }
