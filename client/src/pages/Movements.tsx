@@ -3,7 +3,7 @@ import { Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import type { Account, Category, Tx, TxType } from '../types';
 import { formatMoney, parseMoneyInput, dayLabel, todayISO, currentMonth, monthShift, monthLabel } from '../format';
-import { CategoryIcon, colorToken, Empty, Field, Modal, kindIcon } from '../ui';
+import { CategoryIcon, MerchantBadge, colorToken, Empty, Field, Modal, kindIcon } from '../ui';
 import { useToast } from '../App';
 
 interface TxDraft {
@@ -281,7 +281,7 @@ export default function Movements() {
                   const isForeign = Boolean(t.currency && t.currency !== currency);
                   return (
                   <button className="tx-row" key={t.id} onClick={() => setDraft(draftFrom(t, currency))}>
-                    <CategoryIcon icon={t.category_icon} color={t.category_color} />
+                    <MerchantBadge merchant={t.merchant || t.description} icon={t.category_icon} color={t.category_color} />
                     <div className="tx-main">
                       <div className="tx-merchant">
                         {t.merchant || t.description || (t.type === 'transfer' ? `${t.account_name || 'Cuenta'} → ${t.transfer_to_name}` : t.category_name || 'Movimiento')}

@@ -3,7 +3,7 @@ import { Check, Mail as MailIcon, RefreshCw, ShieldCheck, X, ExternalLink, Check
 import { api } from '../api';
 import type { Account, Category, EmailImport, EmailStatus } from '../types';
 import { formatMoney, parseMoneyInput, dayLabel } from '../format';
-import { Empty, Field, Switch } from '../ui';
+import { Empty, Field, Switch, MerchantBadge } from '../ui';
 import { useToast } from '../App';
 
 function ImportCard({ imp, accounts, categories, onChanged, onEdit }: {
@@ -16,6 +16,7 @@ function ImportCard({ imp, accounts, categories, onChanged, onEdit }: {
   return (
     <div className="card" style={{ padding: 16 }}>
       <div className="row" style={{ alignItems: 'flex-start' }}>
+        <MerchantBadge merchant={imp.merchant || imp.subject} size={34} />
         <div className="grow">
           <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
             {imp.bank && <span className="chip chip-gold">{imp.bank}</span>}
@@ -217,7 +218,7 @@ export default function Mail() {
       <section className="card fade-in">
         <div className="row-between" style={{ flexWrap: 'wrap' }}>
           <div className="row">
-            <span className="tx-icon" style={{ background: 'rgba(0, 225, 253, 0.13)', color: 'var(--accent)' }}><MailIcon size={20} /></span>
+            <span className="tx-icon" style={{ background: 'rgba(201, 245, 63, 0.13)', color: 'var(--accent)' }}><MailIcon size={20} /></span>
             <div>
               <div style={{ fontWeight: 600 }}>{status?.connected ? `Outlook conectado${status.account_email ? ` · ${status.account_email}` : ''}` : 'Conecta tu correo de Outlook'}</div>
               <div className="tx-desc">

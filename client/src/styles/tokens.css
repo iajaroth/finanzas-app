@@ -1,51 +1,50 @@
-/* Paleta neón del usuario (ciberpunk): cyan #00E1FD · magenta #FF2CDF · verde #00FF5B
- * rojo #FF2525 · amarillo #FFE53B · azules #2D27FF/#0014FF · rosa #FF0A6C · #FC007A
+/* Paleta "volt" del usuario: negro + verde lima (#C9F53F) + blanco, estilo financieras modernas
  * Tomorrow (display) + Geist (body) + Geist Mono (cifras)
  */
 :root {
-  /* superficies (azul noche profundo) */
-  --paper: #12132a;
-  --paper-2: #1a1c38;
-  --paper-3: #232650;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  /* superficies (negro profundo) */
+  --paper: #0b0c0b;
+  --paper-2: #131512;
+  --paper-3: #1c1f1b;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
 
   /* texto */
-  --ink: #f2f3ff;
-  --muted: #a6abd4;
-  --faint: #6e739f;
+  --ink: #f4f6f2;
+  --muted: #a8ada6;
+  --faint: #6d716b;
 
-  /* acento: cyan principal + degradados de marca */
-  --accent: #00e1fd;
-  --accent-strong: #6feaff;
-  --accent-2: #ff2cdf;
-  --grad-accent: linear-gradient(135deg, #00e1fd 0%, #2d27ff 100%);
-  --grad-hot: linear-gradient(135deg, #ff2cdf 0%, #0014ff 100%);
-  --on-accent: #ffffff;
+  /* acento: lima volt */
+  --accent: #c9f53f;
+  --accent-strong: #dcff70;
+  --accent-2: #e8ffb0;
+  --grad-accent: linear-gradient(135deg, #c9f53f 0%, #8fd400 100%);
+  --grad-hot: linear-gradient(135deg, #dcff70 0%, #5c9400 100%);
+  --on-accent: #0b0c0b;
 
   /* semánticos de datos */
-  --income: #00ff5b;
-  --expense: #ff2525;
+  --income: #c9f53f;
+  --expense: #ff5c5c;
 
   /* paleta de datos (categorías / cuentas) */
-  --c-gold: #ffe53b;
-  --c-mint: #00ff5b;
-  --c-coral: #ff2525;
-  --c-sky: #00e1fd;
-  --c-violet: #9d8cff;
-  --c-sand: #ff9aa8;
-  --c-teal: #00ffff;
-  --c-plum: #ff0a6c;
+  --c-gold: #c9f53f;
+  --c-mint: #4ade80;
+  --c-coral: #ff5c5c;
+  --c-sky: #60a5fa;
+  --c-violet: #a78bfa;
+  --c-sand: #f5d67b;
+  --c-teal: #2dd4bf;
+  --c-plum: #f472b6;
 
-  /* segundas paradas de degradado por color de cuenta */
-  --g-gold-2: #ff2525;
-  --g-mint-2: #0014ff;
-  --g-coral-2: #ff005b;
-  --g-sky-2: #1200ff;
-  --g-violet-2: #2d27ff;
-  --g-sand-2: #ff005b;
-  --g-teal-2: #00ffff;
-  --g-plum-2: #2d27ff;
+  /* segundas paradas de degradado por color de cuenta (duotono oscuro) */
+  --g-gold-2: #5c7a00;
+  --g-mint-2: #166534;
+  --g-coral-2: #7f1d1d;
+  --g-sky-2: #1e3a8a;
+  --g-violet-2: #4c1d95;
+  --g-sand-2: #92400e;
+  --g-teal-2: #134e4a;
+  --g-plum-2: #831843;
 
   /* tipografía */
   --font-display: "Tomorrow", "Geist Variable", system-ui, sans-serif;

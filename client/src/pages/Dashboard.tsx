@@ -4,7 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, Mail, Trophy, Wallet } from 'lucide-react'
 import { api } from '../api';
 import type { Summary as SummaryType, Tx } from '../types';
 import { formatMoney, monthLabel, currentMonth } from '../format';
-import { CategoryIcon, colorToken, Empty } from '../ui';
+import { CategoryIcon, MerchantBadge, colorToken, Empty } from '../ui';
 import { Donut, IncomeExpenseBars } from '../charts';
 import { InsightsCard, AiChat } from '../ai';
 import { useToast } from '../App';
@@ -15,7 +15,7 @@ function TxRow({ tx, currency }: { tx: Tx; currency: string }) {
   const crc = isForeign ? Math.round(tx.amount * (tx.fx_rate || 0)) : tx.amount;
   return (
     <div className="tx-row">
-      <CategoryIcon icon={tx.category_icon} color={tx.category_color} />
+      <MerchantBadge merchant={tx.merchant || tx.description} icon={tx.category_icon} color={tx.category_color} />
       <div className="tx-main">
         <div className="tx-merchant">{tx.merchant || tx.description || (tx.type === 'transfer' ? `→ ${tx.transfer_to_name}` : tx.category_name)}</div>
         <div className="tx-desc">{tx.account_name || 'Sin cuenta'}{tx.category_name ? ` · ${tx.category_name}` : ''}{isForeign ? ` · original ${formatMoney(tx.amount, tx.currency)}` : ''}</div>
@@ -65,13 +65,13 @@ export default function Dashboard() {
           )}
         </section>
         <section className="card hoverable fade-in">
-          <div className="row"><span className="tx-icon" style={{ background: 'rgba(0, 255, 91, 0.13)', color: 'var(--income)' }}><ArrowUpRight size={18} /></span>
+          <div className="row"><span className="tx-icon" style={{ background: 'rgba(201, 245, 63, 0.13)', color: 'var(--income)' }}><ArrowUpRight size={18} /></span>
             <div className="kpi-label">Ingresos del mes</div></div>
           <div className="kpi-value amount-pos">{data ? formatMoney(data.income, currency) : '···'}</div>
           <div className="kpi-sub">{data ? `${data.recent.length ? '' : 'Sin movimientos aún'}` : ''}</div>
         </section>
         <section className="card hoverable fade-in">
-          <div className="row"><span className="tx-icon" style={{ background: 'rgba(255, 37, 37, 0.12)', color: 'var(--expense)' }}><ArrowDownLeft size={18} /></span>
+          <div className="row"><span className="tx-icon" style={{ background: 'rgba(255, 92, 92, 0.12)', color: 'var(--expense)' }}><ArrowDownLeft size={18} /></span>
             <div className="kpi-label">Gastos del mes</div></div>
           <div className="kpi-value amount-neg">{data ? formatMoney(data.expense, currency) : '···'}</div>
           <div className="kpi-sub">Neto: <span className={netPos ? 'amount-pos' : 'amount-neg'}>{data ? formatMoney(data.net, currency, { sign: true }) : '···'}</span></div>

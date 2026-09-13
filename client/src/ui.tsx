@@ -1,5 +1,6 @@
 import { type ReactNode, type FormEvent, useEffect } from 'react';
 import * as Icons from 'lucide-react';
+import { matchBrand, readableText } from './brands';
 import { clearToken, getToken } from './api';
 
 export const CAT_COLORS: Record<string, string> = {
@@ -28,6 +29,33 @@ export function CategoryIcon({ icon, color, size = 18 }: { icon?: string | null;
       <I size={size} />
     </span>
   );
+}
+
+// Logo real del comercio si existe (SVG en /brands) o monograma de marca;
+// si no hay marca reconocida, cae al icono de categoría.
+export function MerchantBadge({ merchant, icon, color, size = 38 }: {
+  merchant?: string | null; icon?: string | null; color?: string | null; size?: number;
+}) {
+  const brand = matchBrand(merchant || '');
+  if (brand?.file) {
+    return (
+      <span className="tx-icon" style={{ background: '#ffffff', width: size, height: size }}>
+        <img src={`/brands/${brand.file}.svg`} alt={brand.name} width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} loading="lazy" />
+      </span>
+    );
+  }
+  if (brand) {
+    return (
+      <span className="tx-icon" style={{
+        background: brand.color, color: readableText(brand.color),
+        width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.32)),
+        fontWeight: 700, fontFamily: 'var(--font-display)', letterSpacing: '-0.02em',
+      }}>
+        {brand.mono || brand.name.slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
+  return <CategoryIcon icon={icon} color={color} size={Math.round(size * 0.47)} />;
 }
 
 export function kindIcon(kind?: string | null) {
