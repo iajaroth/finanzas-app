@@ -531,6 +531,7 @@ export function apiRouter() {
     const image = String(req.body?.image || '');
     if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) return res.status(400).json({ error: 'Envía una imagen (data URL jpeg/png/webp).' });
     const { key, model } = openRouterStatus();
+    console.log('[ocr] petición de escaneo, imagen', Math.round(image.length / 1024), 'KB');
     const sys = `Extraes datos de comprobantes de pago, capturas de SINPE o pantallas bancarias de Costa Rica. Hoy es ${new Date().toISOString().slice(0, 10)}.
 Responde ÚNICAMENTE un JSON válido, sin texto extra:
 {"tipo":"income|expense","monto":<número en colones o dólares>,"moneda":"CRC|USD","fecha":"YYYY-MM-DD","comercio":"nombre del comercio o persona","concepto":"breve concepto"}
@@ -546,11 +547,13 @@ Reglas: income = el usuario RECIBIÓ dinero (Ha recibido, abono, pago recibido);
             { type: 'image_url', image_url: { url: image } },
           ] }],
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(60_000),
       });
+      console.log('[ocr] OpenRouter respondió:', r.status);
       if (!r.ok) throw new Error(`OpenRouter ${r.status}`);
       const data = await r.json();
       const msg = data.choices?.[0]?.message || {};
+      console.log('[ocr] finish:', data.choices?.[0]?.finish_reason, '| contenido:', (msg.content || '').slice(0, 150) || '(vacío)');
       const text = (msg.content || '').trim() || String(msg.reasoning || '').slice(-300);
       const m = text.match(/\{[\s\S]*\}/);
       if (!m) throw new Error('no se pudo leer la imagen');
