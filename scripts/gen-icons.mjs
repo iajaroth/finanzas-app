@@ -87,7 +87,18 @@ function draw(u, v, corner) {
   return [c[0], c[1], c[2], corner < 1 ? 255 : 255];
 }
 
+function drawSplash(u, v) {
+  // logo centrado ocupando el 36% del lienzo, fondo negro
+  const cx0 = 0.5 - 0.18, cx1 = 0.5 + 0.18;
+  if (u < cx0 || u > cx1 || v < cx0 || v > cx1) return BG.concat([255]);
+  const lu = (u - cx0) / 0.36, lv = (v - cx0) / 0.36;
+  const c = draw(lu, lv, 0);
+  return c;
+}
+
 for (const size of [192, 512]) {
   fs.writeFileSync(path.join(outDir, `icon-${size}.png`), png(size, draw));
 }
-console.log('iconos generados en', outDir);
+fs.writeFileSync(path.join(__dirname, '..', 'assets', 'icon.png'), png(1024, draw));
+fs.writeFileSync(path.join(__dirname, '..', 'assets', 'splash.png'), png(2732, drawSplash));
+console.log('iconos generados en', outDir, '+ assets/icon.png + assets/splash.png');
