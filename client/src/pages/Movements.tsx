@@ -154,6 +154,11 @@ function TxModal({ draft, setDraft, onClose, onSave, accounts, categories, curre
         <Field label="Monto">
           <input className="input amount" inputMode="decimal" placeholder="0,00" value={draft.amountText}
             onChange={(e) => set({ amountText: e.target.value })} autoFocus />
+          {cents !== null && draft.currency === currency && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--faint)' }}>
+              Se registrará: <strong style={{ color: 'var(--ink)' }}>{formatMoney(cents, currency)}</strong>
+            </span>
+          )}
         </Field>
         <Field label="Moneda">
           <select className="select" value={draft.currency} onChange={(e) => set({ currency: e.target.value })}>
