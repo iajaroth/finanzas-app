@@ -54,6 +54,13 @@ export function parseMoneyInput(raw: string): number | null {
   return Math.round(num * 100);
 }
 
+// centavos → texto para el formulario, SIEMPRE con coma decimal si hay centavos
+// ("367826,25") — así parseMoneyInput nunca confunde el punto con miles
+export function centsToInput(cents: number): string {
+  const v = cents / 100;
+  return Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',');
+}
+
 export function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

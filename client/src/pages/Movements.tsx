@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api';
 import type { Account, Category, Tx, TxType } from '../types';
-import { formatMoney, parseMoneyInput, dayLabel, todayISO, currentMonth, monthShift, monthLabel } from '../format';
+import { formatMoney, parseMoneyInput, centsToInput, dayLabel, todayISO, currentMonth, monthShift, monthLabel } from '../format';
 import { CategoryIcon, MerchantBadge, colorToken, Empty, Field, Modal, kindIcon } from '../ui';
 import { useToast } from '../App';
 
@@ -46,7 +46,7 @@ function draftFrom(tx?: Tx | null, base = 'CRC'): TxDraft {
   return {
     id: tx?.id,
     type: tx?.type || 'expense',
-    amountText: tx ? String(tx.amount / 100) : '',
+    amountText: tx ? centsToInput(tx.amount) : '',
     currency: tx?.currency || base,
     occurred_at: tx?.occurred_at || todayISO(),
     account_id: tx?.account_id ? String(tx.account_id) : '',

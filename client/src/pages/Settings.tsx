@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Plus, Trash2, X } from 'lucide-react';
 import { api, clearToken } from '../api';
 import type { Category, Settings as SettingsType } from '../types';
-import { CURRENCIES } from '../format';
+import { CURRENCIES, centsToInput } from '../format';
 import { Field, Modal, colorToken } from '../ui';
 import { useToast } from '../App';
 
@@ -66,7 +66,7 @@ export default function SettingsPage() {
   const load = useCallback(() => {
     api.get<SettingsType>('/settings').then((s) => {
       setSettings(s);
-      setBudgetText(s.monthly_budget ? String(s.monthly_budget / 100) : '');
+      setBudgetText(s.monthly_budget ? centsToInput(s.monthly_budget) : '');
       setBccrEmail(s.bccr?.email || '');
       setManualRate(s.usd_rate_manual ? String(s.usd_rate_manual) : '');
       if (s.openrouter?.model) setOrModel(s.openrouter.model);

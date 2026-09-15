@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Mail as MailIcon, RefreshCw, ShieldCheck, X, ExternalLink, CheckCheck } from 'lucide-react';
 import { api } from '../api';
 import type { Account, Category, EmailImport, EmailStatus } from '../types';
-import { formatMoney, parseMoneyInput, dayLabel } from '../format';
+import { formatMoney, parseMoneyInput, centsToInput, dayLabel } from '../format';
 import { Empty, Field, Switch, MerchantBadge } from '../ui';
 import { useToast } from '../App';
 
@@ -58,7 +58,7 @@ function AdjustModal({ imp, accounts, categories, onClose, onSave }: {
   imp: EmailImport; accounts: Account[]; categories: Category[]; onClose: () => void; onSave: () => void;
 }) {
   const [type, setType] = useState(imp.type || 'expense');
-  const [amountText, setAmountText] = useState(imp.amount ? String(imp.amount / 100) : '');
+  const [amountText, setAmountText] = useState(imp.amount ? centsToInput(imp.amount) : '');
   const [merchant, setMerchant] = useState(imp.merchant || '');
   const [categoryId, setCategoryId] = useState(String(imp.category_id || ''));
   const [accountId, setAccountId] = useState(String(imp.account_id || ''));
