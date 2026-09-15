@@ -535,7 +535,7 @@ export function apiRouter() {
     const sys = `Extraes datos de comprobantes de pago, capturas de SINPE o pantallas bancarias de Costa Rica. Hoy es ${new Date().toISOString().slice(0, 10)}.
 Responde ÚNICAMENTE un JSON válido, sin texto extra:
 {"tipo":"income|expense","monto":<número en colones o dólares>,"moneda":"CRC|USD","fecha":"YYYY-MM-DD","comercio":"nombre del comercio o persona","concepto":"breve concepto"}
-Reglas: income = el usuario RECIBIÓ dinero (Ha recibido, abono, pago recibido); expense = el usuario PAGÓ (compra, Haz enviado, pago realizado). Si la fecha no es visible usa hoy. Si la moneda no es clara, CRC.`;
+Reglas: income = el usuario RECIBIÓ dinero de un tercero (Ha recibido, abono, SINPE recibido, pago de cliente). expense = el usuario PAGÓ (compra, Haz enviado, pago realizado). IMPORTANTE: si la imagen es un estado de cuenta o detalle de TARJETA y dice 'PAGO RECIBIDO' (la tarjeta recibió un abono), NO es ingreso: es el usuario pagando su propia tarjeta → tipo 'expense', comercio 'Pago de tarjeta <nombre>', concepto 'Abono a tarjeta'. Si la fecha no es visible usa hoy. Si la moneda no es clara, CRC.`;
     try {
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
