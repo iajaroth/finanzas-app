@@ -1,104 +1,64 @@
-// Genera iconos PNG (192 y 512) para el manifest PWA sin dependencias nativas
-import zlib from 'node:zlib';
+// Genera iconos PWA + assets de Capacitor (icon 1024, splash 2732) con pngjs
+import { PNG } from 'pngjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '..', 'client', 'public', 'icons');
+const assetsDir = path.join(__dirname, '..', 'assets');
 fs.mkdirSync(outDir, { recursive: true });
+fs.mkdirSync(assetsDir, { recursive: true });
 
-function crc32(buf) {
-  let table = crc32.table;
-  if (!table) {
-    table = crc32.table = new Int32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      table[n] = c;
-    }
+const BG = [11, 12, 11];
+
+// logo vectorial: anillo lima + 3 barras (lima, blanco, gris)
+function drawIcon(fx, fy, S) {
+  const px = fx * S, py = fy * S;
+  const dist = Math.hypot(px - S / 2, py - S / 2);
+  const ringHalf = S * 0.029;
+  if (Math.abs(dist - S * 0.30) <= ringHalf) return [201, 245, 63, 255];
+  const bars = [
+    { x: 0.375, y: 0.42, h: 0.19, c: [201, 245, 63] },
+    { x: 0.484, y: 0.34, h: 0.33, c: [255, 255, 255] },
+    { x: 0.594, y: 0.47, h: 0.22, c: [154, 160, 150] },
+  ];
+  const w = S * 0.062, r = w / 2;
+  for (const b of bars) {
+    const x0 = b.x * S, y0 = b.y * S, x1 = x0 + w, y1 = y0 + b.h * S;
+    const qx = Math.max(x0 + r, Math.min(px, x1 - r));
+    const qy = Math.max(y0 + r, Math.min(py, y1 - r));
+    if (Math.hypot(px - qx, py - qy) <= r) return [...b.c, 255];
   }
-  let c = 0xffffffff;
-  for (const b of buf) c = table[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
+  return [...BG, 255];
 }
 
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
+function drawSplash(fx, fy, S) {
+  const half = 0.17;
+  if (fx < 0.5 - half || fx > 0.5 + half || fy < 0.5 - half || fy > 0.5 + half) return [...BG, 255];
+  const lx = (fx - (0.5 - half)) / (half * 2);
+  const ly = (fy - (0.5 - half)) / (half * 2);
+  return drawIcon(lx, ly, 1024);
 }
 
-function png(size, draw) {
-  const px = Buffer.alloc(size * size * 4);
+function makePng(size, draw) {
+  const png = new PNG({ width: size, height: size });
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const [r, g, b, a] = draw(x / (size - 1), y / (size - 1), Math.min(x, y, size - 1 - x, size - 1 - y) / (size * 0.14));
-      const i = (y * size + x) * 4;
-      px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = a;
+      const [r, g, b, a] = draw(x / (size - 1), y / (size - 1), size);
+      const idx = (size * y + x) << 2;
+      png.data[idx] = r; png.data[idx + 1] = g; png.data[idx + 2] = b; png.data[idx + 3] = a;
     }
   }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; ihdr[9] = 6; // 8-bit RGBA
-  const raw = Buffer.alloc(size * (size + 1));
-  for (let y = 0; y < size; y++) {
-    raw[y * (size + 1)] = 0;
-    px.copy(raw, y * (size + 1) + 1, y * size * 4, (y + 1) * size * 4);
-  }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-// mezcla colores en el espacio RGB
-const mix = (c1, c2, t) => c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
-const BG = [11, 12, 11];
-const LIME = [201, 245, 63];
-
-
-
-function draw(u, v, corner) {
-  const x = u, y = v;
-  // fondo con glow magenta arriba a la derecha
-  const d1 = Math.hypot(x - 0.85, y - 0.1);
-  const glow = Math.max(0, 1 - d1 * 1.7) * 0.2;
-  let c = mix(BG, LIME, glow);
-  // anillo con degradado cyan→azul (izq→der)
-  const dc = Math.hypot(x - 0.5, y - 0.5);
-  const ring = Math.abs(dc - 0.3) < 0.045 ? 1 : 0;
-  if (ring) c = LIME;
-  // barras (gráfico)
-  const bars = [
-    [0.385, 0.56, 0.72],
-    [0.475, 0.44, 0.78],
-    [0.565, 0.60, 0.72],
-  ];
-  for (const [bx, by, bw] of bars) {
-    if (x > bx && x < bx + bw * 0.4 && y > by && y < 0.78) c = LIME;
-  }
-  return [c[0], c[1], c[2], corner < 1 ? 255 : 255];
-}
-
-function drawSplash(u, v) {
-  // logo centrado ocupando el 36% del lienzo, fondo negro
-  const cx0 = 0.5 - 0.18, cx1 = 0.5 + 0.18;
-  if (u < cx0 || u > cx1 || v < cx0 || v > cx1) return BG.concat([255]);
-  const lu = (u - cx0) / 0.36, lv = (v - cx0) / 0.36;
-  const c = draw(lu, lv, 0);
-  return c;
+  return PNG.sync.write(png);
 }
 
 for (const size of [192, 512]) {
-  fs.writeFileSync(path.join(outDir, `icon-${size}.png`), png(size, draw));
+  fs.writeFileSync(path.join(outDir, `icon-${size}.png`), makePng(size, (fx, fy) => drawIcon(fx, fy, size)));
 }
-fs.writeFileSync(path.join(__dirname, '..', 'assets', 'icon.png'), png(1024, draw));
-fs.writeFileSync(path.join(__dirname, '..', 'assets', 'splash.png'), png(2732, drawSplash));
-console.log('iconos generados en', outDir, '+ assets/icon.png + assets/splash.png');
+fs.writeFileSync(path.join(assetsDir, 'icon.png'), makePng(1024, (fx, fy) => drawIcon(fx, fy, 1024)));
+fs.writeFileSync(path.join(assetsDir, 'splash.png'), makePng(2732, (fx, fy) => drawSplash(fx, fy, 2732)));
+
+// verificación: decodifica con pngjs
+const check = PNG.sync.read(fs.readFileSync(path.join(assetsDir, 'icon.png')));
+console.log('verificado:', check.width, 'x', check.height, '| iconos + assets generados');

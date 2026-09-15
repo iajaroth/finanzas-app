@@ -37,6 +37,7 @@ jobs:
           npx cap add android || npx cap sync android
           npx cap sync android
           npx --yes @capacitor/assets generate --android --iconBackgroundColor "#0b0c0b" --splashBackgroundColor "#0b0c0b" --assetPath "assets"
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">Finanzas</string>|' android/app/src/main/res/values/strings.xml
       - name: Compilar APK debug
         working-directory: android
         run: |
